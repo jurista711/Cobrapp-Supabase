@@ -67,7 +67,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
       if (!mounted) return;
       setState(() {
         loading = false;
-        statusMessage = 'Erro ao carregar documentos. Verifique internet/Supabase.';
+        statusMessage = 'Erro ao carregar documentos. Verifique a internet e o Supabase.';
       });
     }
   }
@@ -86,12 +86,12 @@ class _DocumentsPageState extends State<DocumentsPage> {
     final customer = customers.firstWhere((item) => item.id == selectedCustomerId);
     final loan = selectedLoanId == null
         ? null
-        : loans.where((item) => item.id == selectedLoanId).cast<LoanListItem?>().firstOrNull;
+        : loans.where((item) => item.id == selectedLoanId).firstOrNull;
 
     final body = buildDocumentBody(customer: customer, loan: loan);
     final title = documentType == 'recibo_pagamento'
-        ? 'Recibo - ${customer.fullName}'
-        : 'Contrato - ${customer.fullName}';
+        ? 'Recibo de Pagamento - ${customer.fullName}'
+        : 'Contrato de Empréstimo - ${customer.fullName}';
 
     setState(() => saving = true);
     try {
@@ -116,13 +116,34 @@ class _DocumentsPageState extends State<DocumentsPage> {
   String buildDocumentBody({required Customer customer, required LoanListItem? loan}) {
     final observation = observationController.text.trim();
     final amount = loan == null ? 'não informado' : formatMoney(loan.totalDebt);
-    final now = formatDate(DateTime.now());
+    final emissionDate = formatDate(DateTime.now());
+    final endDate = loan == null ? 'não informado' : formatDate(loan.endDate);
+    final installments = loan == null ? 'não informado' : loan.paymentsNumber.toString();
+    final note = observation.isEmpty ? 'Sem observação.' : observation;
 
     if (documentType == 'recibo_pagamento') {
-      return 'RECIBO DE PAGAMENTO\n\nRecebi de ${customer.fullName}, documento ${customer.identification}, o valor referente ao acordo/emprestimo cadastrado no CobrApp.\n\nValor relacionado: $amount\nData: $now\n\nObservacao: ${observation.isEmpty ? 'Sem observacao.' : observation}\n\nAssinatura: ______________________________';
+      return 'RECIBO DE PAGAMENTO\n\n'
+          'Eu declaro, para os devidos fins, que recebi de ${customer.fullName}, '
+          'documento nº ${customer.identification}, o valor referente ao empréstimo ou acordo cadastrado no CobrApp.\n\n'
+          'Valor relacionado: $amount\n'
+          'Data de emissão: $emissionDate\n\n'
+          'Observação: $note\n\n'
+          'Assinatura do recebedor: ______________________________\n'
+          'Assinatura do pagador: ______________________________';
     }
 
-    return 'CONTRATO DE EMPRESTIMO\n\nCredor e devedor declaram que ${customer.fullName}, documento ${customer.identification}, possui emprestimo registrado no CobrApp Supabase.\n\nValor total relacionado: $amount\nData de emissao: $now\n\nO pagamento devera seguir as parcelas cadastradas no sistema. Em caso de atraso, podera haver cobranca conforme combinada entre as partes.\n\nObservacao: ${observation.isEmpty ? 'Sem observacao.' : observation}\n\nAssinatura do cliente: ______________________________\nAssinatura do credor: ______________________________';
+    return 'CONTRATO DE EMPRÉSTIMO\n\n'
+        'Pelo presente instrumento particular, as partes declaram que ${customer.fullName}, '
+        'documento nº ${customer.identification}, possui empréstimo registrado no CobrApp Supabase.\n\n'
+        'Valor total do empréstimo: $amount\n'
+        'Quantidade de parcelas: $installments\n'
+        'Vencimento final: $endDate\n'
+        'Data de emissão: $emissionDate\n\n'
+        'O pagamento deverá seguir as parcelas cadastradas no sistema. Em caso de atraso, '
+        'poderá haver cobrança conforme combinado entre as partes.\n\n'
+        'Observação: $note\n\n'
+        'Assinatura do cliente: ______________________________\n'
+        'Assinatura do credor: ______________________________';
   }
 
   void showDocumentPreview(String title, String body) {
@@ -189,8 +210,8 @@ class _DocumentsPageState extends State<DocumentsPage> {
                     initialValue: documentType,
                     decoration: const InputDecoration(labelText: 'Tipo'),
                     items: const [
-                      DropdownMenuItem(value: 'contrato_emprestimo', child: Text('Contrato de emprestimo')),
-                      DropdownMenuItem(value: 'recibo_pagamento', child: Text('Recibo de pagamento')),
+                      DropdownMenuItem(value: 'contrato_emprestimo', child: Text('Contrato de Empréstimo')),
+                      DropdownMenuItem(value: 'recibo_pagamento', child: Text('Recibo de Pagamento')),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
@@ -217,11 +238,11 @@ class _DocumentsPageState extends State<DocumentsPage> {
                     ),
                   const SizedBox(height: 12),
                   if (customerLoans.isEmpty)
-                    const Text('Nenhum emprestimo para este cliente.')
+                    const Text('Nenhum empréstimo para este cliente.')
                   else
                     DropdownButtonFormField<String>(
                       initialValue: selectedLoanId,
-                      decoration: const InputDecoration(labelText: 'Emprestimo'),
+                      decoration: const InputDecoration(labelText: 'Empréstimo'),
                       items: customerLoans
                           .map(
                             (loan) => DropdownMenuItem(
@@ -237,7 +258,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
                     controller: observationController,
                     minLines: 2,
                     maxLines: 4,
-                    decoration: const InputDecoration(labelText: 'Observacao'),
+                    decoration: const InputDecoration(labelText: 'Observação'),
                   ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
@@ -267,13 +288,24 @@ class _DocumentsPageState extends State<DocumentsPage> {
                 child: ListTile(
                   leading: const Icon(Icons.description_outlined),
                   title: Text(document.title),
-                  subtitle: Text('${document.customerName} • ${document.documentType}'),
+                  subtitle: Text('${document.customerName} • ${documentTypeLabel(document.documentType)}'),
                   trailing: Text(formatDate(document.createdAt)),
                 ),
               ),
         ],
       ),
     );
+  }
+
+  String documentTypeLabel(String type) {
+    switch (type) {
+      case 'contrato_emprestimo':
+        return 'Contrato de Empréstimo';
+      case 'recibo_pagamento':
+        return 'Recibo de Pagamento';
+      default:
+        return 'Documento';
+    }
   }
 }
 
