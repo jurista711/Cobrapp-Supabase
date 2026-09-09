@@ -5,7 +5,12 @@ class CustomersRepository {
   const CustomersRepository();
 
   Future<List<Customer>> listCustomers() async {
-    final rows = await supabase
+    final client = supabaseOrNull;
+    if (client == null) {
+      return const <Customer>[];
+    }
+
+    final rows = await client
         .from('customers')
         .select('id, full_name, identification, phone, email, address, active')
         .eq('active', true)
@@ -23,7 +28,12 @@ class CustomersRepository {
     String? email,
     String? address,
   }) async {
-    final row = await supabase
+    final client = supabaseOrNull;
+    if (client == null) {
+      throw StateError('Supabase não configurado neste APK.');
+    }
+
+    final row = await client
         .from('customers')
         .insert({
           'full_name': fullName,
@@ -39,7 +49,12 @@ class CustomersRepository {
   }
 
   Future<void> deactivateCustomer(String id) async {
-    await supabase
+    final client = supabaseOrNull;
+    if (client == null) {
+      throw StateError('Supabase não configurado neste APK.');
+    }
+
+    await client
         .from('customers')
         .update({'active': false, 'updated_at': DateTime.now().toIso8601String()})
         .eq('id', id);
