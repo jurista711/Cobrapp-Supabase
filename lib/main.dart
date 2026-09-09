@@ -8,6 +8,7 @@ import 'features/collections/collections_page.dart';
 import 'features/customers/customers_page.dart';
 import 'features/dashboard/dashboard_page.dart';
 import 'features/documents/documents_page.dart';
+import 'features/extra/extra_pages.dart';
 import 'features/loans/loans_page.dart';
 
 Future<void> main() async {
@@ -131,13 +132,13 @@ class _HomePageState extends State<HomePage> {
               _DrawerItem(icon: Icons.event_available_outlined, title: 'Cobranças', onTap: () => openMainPage(3)),
               _DrawerItem(icon: Icons.point_of_sale_outlined, title: 'Caixa', onTap: () => openMainPage(4)),
               const Divider(),
-              _DrawerItem(icon: Icons.payments_outlined, title: 'Pagamentos', onTap: () => openDrawerPage('Pagamentos', const FeatureShellPage(title: 'Pagamentos', description: 'Histórico e controle de pagamentos registrados.'))),
-              _DrawerItem(icon: Icons.receipt_long_outlined, title: 'Recibos', onTap: () => openDrawerPage('Recibos', const FeatureShellPage(title: 'Recibos', description: 'Recibos numerados, PDF, assinatura e envio.'))),
-              _DrawerItem(icon: Icons.route_outlined, title: 'Rotas', onTap: () => openDrawerPage('Rotas', const FeatureShellPage(title: 'Rotas', description: 'Organização de rotas de cobrança e clientes por rota.'))),
-              _DrawerItem(icon: Icons.bar_chart_outlined, title: 'Relatórios', onTap: () => openDrawerPage('Relatórios', const FeatureShellPage(title: 'Relatórios', description: 'Filtros, períodos, totais e exportação.'))),
-              _DrawerItem(icon: Icons.pie_chart_outline, title: 'Gestão da Carteira', onTap: () => openDrawerPage('Gestão da Carteira', const FeatureShellPage(title: 'Gestão da Carteira', description: 'Visão consolidada da carteira, saldo aberto e inadimplência.'))),
-              _DrawerItem(icon: Icons.calculate_outlined, title: 'Calculadora', onTap: () => openDrawerPage('Calculadora', const FeatureShellPage(title: 'Calculadora', description: 'Simulação de crédito com tipos de juros e frequências.'))),
-              _DrawerItem(icon: Icons.settings_outlined, title: 'Configurações', onTap: () => openDrawerPage('Configurações', const FeatureShellPage(title: 'Configurações', description: 'Preferências, dados do negócio, moeda, logo e assinatura.'))),
+              _DrawerItem(icon: Icons.payments_outlined, title: 'Pagamentos', onTap: () => openDrawerPage('Pagamentos', const PaymentsPage())),
+              _DrawerItem(icon: Icons.receipt_long_outlined, title: 'Recibos', onTap: () => openDrawerPage('Recibos', const ReceiptsPage())),
+              _DrawerItem(icon: Icons.route_outlined, title: 'Rotas', onTap: () => openDrawerPage('Rotas', const RoutesPage())),
+              _DrawerItem(icon: Icons.bar_chart_outlined, title: 'Relatórios', onTap: () => openDrawerPage('Relatórios', const ReportsPage())),
+              _DrawerItem(icon: Icons.pie_chart_outline, title: 'Gestão da Carteira', onTap: () => openDrawerPage('Gestão da Carteira', const PortfolioPage())),
+              _DrawerItem(icon: Icons.calculate_outlined, title: 'Calculadora', onTap: () => openDrawerPage('Calculadora', const CalculatorPage())),
+              _DrawerItem(icon: Icons.settings_outlined, title: 'Configurações', onTap: () => openDrawerPage('Configurações', const SettingsPage())),
               _DrawerItem(icon: Icons.description_outlined, title: 'Documentos', onTap: () => openDrawerPage('Documentos', const DocumentsPage())),
             ],
           ),
@@ -185,36 +186,5 @@ class _DrawerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(leading: Icon(icon), title: Text(title), onTap: onTap);
-  }
-}
-
-class FeatureShellPage extends StatelessWidget {
-  const FeatureShellPage({super.key, required this.title, required this.description});
-
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Text(title, style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(description),
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Card(
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Tela criada no menu correto do original. Próxima etapa: conectar regra e banco específicos desta função.'),
-          ),
-        ),
-      ],
-    );
   }
 }
