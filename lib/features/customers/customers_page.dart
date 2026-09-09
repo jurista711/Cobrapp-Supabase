@@ -50,7 +50,7 @@ class _CustomersPageState extends State<CustomersPage> {
   Future<void> loadCustomers() async {
     if (!hasSupabaseConfig) {
       setState(() {
-        loadError = 'Supabase não configurado neste APK. Informe as chaves no build para salvar online.';
+        loadError = 'Supabase não conectado neste APK. Gere a build com SUPABASE_URL e SUPABASE_ANON_KEY configurados nos Secrets do GitHub.';
       });
       return;
     }
@@ -68,9 +68,9 @@ class _CustomersPageState extends State<CustomersPage> {
           ..clear()
           ..addAll(loaded);
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => loadError = 'Não foi possível carregar clientes do Supabase.');
+      setState(() => loadError = 'Não foi possível carregar clientes do Supabase: $error');
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -79,6 +79,16 @@ class _CustomersPageState extends State<CustomersPage> {
   Future<void> saveCustomer() async {
     final name = nameController.text.trim();
     final document = documentController.text.trim();
+
+    if (!hasSupabaseConfig) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Supabase não conectado. Cliente não foi salvo.')),
+      );
+      setState(() {
+        loadError = 'Supabase não conectado neste APK. A build precisa receber SUPABASE_URL e SUPABASE_ANON_KEY.';
+      });
+      return;
+    }
 
     if (name.isEmpty || document.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,25 +100,13 @@ class _CustomersPageState extends State<CustomersPage> {
     setState(() => saving = true);
 
     try {
-      late final Customer customer;
-      if (hasSupabaseConfig) {
-        customer = await repository.createCustomer(
-          fullName: name,
-          identification: document,
-          phone: _optional(phoneController.text),
-          email: _optional(emailController.text),
-          address: _optional(addressController.text),
-        );
-      } else {
-        customer = Customer(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          fullName: name,
-          identification: document,
-          phone: _optional(phoneController.text),
-          email: _optional(emailController.text),
-          address: _optional(addressController.text),
-        );
-      }
+      final customer = await repository.createCustomer(
+        fullName: name,
+        identification: document,
+        phone: _optional(phoneController.text),
+        email: _optional(emailController.text),
+        address: _optional(addressController.text),
+      );
 
       if (!mounted) return;
       setState(() {
@@ -121,18 +119,12 @@ class _CustomersPageState extends State<CustomersPage> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            hasSupabaseConfig
-                ? 'Cliente salvo no Supabase.'
-                : 'Cliente adicionado só para validação deste APK.',
-          ),
-        ),
+        const SnackBar(content: Text('Cliente salvo no Supabase.')),
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro ao salvar cliente. Verifique documento duplicado ou conexão.')),
+        SnackBar(content: Text('Erro ao salvar cliente no Supabase: $error')),
       );
     } finally {
       if (mounted) setState(() => saving = false);
@@ -140,18 +132,23 @@ class _CustomersPageState extends State<CustomersPage> {
   }
 
   Future<void> removeCustomer(Customer customer) async {
+    if (!hasSupabaseConfig) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Supabase não conectado. Cliente não foi removido.')),
+      );
+      return;
+    }
+
     final oldIndex = customers.indexOf(customer);
     setState(() => customers.remove(customer));
 
     try {
-      if (hasSupabaseConfig) {
-        await repository.deactivateCustomer(customer.id);
-      }
-    } catch (_) {
+      await repository.deactivateCustomer(customer.id);
+    } catch (error) {
       if (!mounted) return;
       setState(() => customers.insert(oldIndex < 0 ? 0 : oldIndex, customer));
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível remover o cliente.')),
+        SnackBar(content: Text('Não foi possível remover o cliente: $error')),
       );
     }
   }
@@ -215,11 +212,11 @@ class _CustomersPageState extends State<CustomersPage> {
           ],
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível carregar detalhes do cliente.')),
+        SnackBar(content: Text('Não foi possível carregar detalhes do cliente: $error')),
       );
     }
   }
