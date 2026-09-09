@@ -1,17 +1,17 @@
-import '../core/supabase_config.dart';
+import '../core/licensed_rpc.dart';
 
 class CollectionsRepository {
   const CollectionsRepository();
 
   Future<List<CollectionInstallment>> listPendingInstallments() async {
-    final rows = await supabaseRequired.rpc('cobrapp_app_list_pending_installments');
+    final rows = await licensedRpc('cobrapp_app_list_pending_installments');
     return (rows as List)
         .map<CollectionInstallment>((row) => CollectionInstallment.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
   Future<void> markInstallmentPaid(CollectionInstallment installment) async {
-    await supabaseRequired.rpc(
+    await licensedRpc(
       'cobrapp_app_mark_installment_paid',
       params: {'p_installment_id': installment.id},
     );
