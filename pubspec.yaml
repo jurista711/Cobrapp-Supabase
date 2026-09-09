@@ -12,6 +12,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   intl: ^0.20.2
   supabase_flutter: ^2.9.1
+  shared_preferences: ^2.3.5
   pdf: ^3.11.3
   printing: ^5.14.2
   share_plus: ^11.0.0
