@@ -4,44 +4,288 @@ import 'package:flutter/material.dart';
 
 import '../../core/supabase_config.dart';
 
-class PaymentsPage extends StatelessWidget {
+class PaymentsPage extends StatefulWidget {
   const PaymentsPage({super.key});
 
   @override
+  State<PaymentsPage> createState() => _PaymentsPageState();
+}
+
+class _PaymentsPageState extends State<PaymentsPage> {
+  bool loading = true;
+  String? error;
+  List<Map<String, dynamic>> payments = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    loadPayments();
+  }
+
+  Future<void> loadPayments() async {
+    final client = supabaseOrNull;
+    if (client == null) {
+      setState(() {
+        loading = false;
+        payments = const [];
+      });
+      return;
+    }
+
+    setState(() {
+      loading = true;
+      error = null;
+    });
+
+    try {
+      final loaded = await client
+          .from('payments')
+          .select('id, amount, principal_amount, interest_amount, late_interest_amount, payment_date, method, note, status, created_at, loans(id, customers(full_name, phone))')
+          .order('payment_date', ascending: false)
+          .limit(100);
+
+      if (!mounted) return;
+      setState(() {
+        payments = loaded.map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row)).toList();
+        loading = false;
+      });
+    } catch (_) {
+      try {
+        final loaded = await client
+            .from('payments')
+            .select('id, amount, payment_date, method, note, status, created_at')
+            .order('payment_date', ascending: false)
+            .limit(100);
+
+        if (!mounted) return;
+        setState(() {
+          payments = loaded.map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row)).toList();
+          loading = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          loading = false;
+          error = 'Não foi possível carregar os pagamentos.';
+        });
+      }
+    }
+  }
+
+  String customerName(Map<String, dynamic> row) {
+    final loan = row['loans'];
+    if (loan is Map<String, dynamic>) {
+      final customer = loan['customers'];
+      if (customer is Map<String, dynamic>) {
+        return customer['full_name']?.toString() ?? 'Cliente';
+      }
+    }
+    return 'Cliente não informado';
+  }
+
+  void showReceiptPreview(Map<String, dynamic> row) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Prévia do recibo'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Cliente: ${customerName(row)}'),
+            Text('Valor: ${money(_toDouble(row['amount']))}'),
+            Text('Data: ${formatDate(row['payment_date'] ?? row['created_at'])}'),
+            Text('Método: ${row['method'] ?? 'manual'}'),
+            if ((row['note'] ?? '').toString().trim().isNotEmpty) Text('Obs: ${row['note']}'),
+            const SizedBox(height: 12),
+            const Text('Próxima etapa: gerar recibo numerado em PDF e compartilhar no WhatsApp.'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Fechar')),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const _RemoteListPage(
-      title: 'Pagamentos',
-      icon: Icons.payments_outlined,
-      table: 'payments',
-      select: 'id, amount, payment_date, method, status, created_at',
-      emptyText: 'Nenhum pagamento registrado.',
-      fields: ['amount', 'payment_date', 'method', 'status'],
-      fallback: [
-        _ActionInfo('Histórico de pagamentos', 'Lista pagamentos registrados no Supabase.'),
-        _ActionInfo('Baixa de parcela', 'Baixa ligada ao fluxo de cobrança e empréstimo.'),
-        _ActionInfo('Recibo', 'Cada pagamento poderá gerar recibo numerado.'),
-      ],
+    final total = payments.fold<double>(0, (sum, row) => sum + _toDouble(row['amount']));
+
+    return RefreshIndicator(
+      onRefresh: loadPayments,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _Header(title: 'Pagamentos', icon: Icons.payments_outlined),
+          const SizedBox(height: 12),
+          _MetricRow(
+            leftTitle: 'Total recebido',
+            leftValue: money(total),
+            rightTitle: 'Registros',
+            rightValue: payments.length.toString(),
+          ),
+          const SizedBox(height: 12),
+          if (loading) const LinearProgressIndicator(),
+          if (error != null) _InfoCard(title: 'Atenção', text: error!),
+          if (!loading && payments.isEmpty) ...[
+            const _InfoCard(title: 'Nenhum pagamento registrado.', text: 'Quando houver baixa de parcela, o histórico aparecerá aqui.'),
+            const _InfoCard(title: 'Recibo', text: 'Cada pagamento fica preparado para gerar recibo numerado.'),
+          ],
+          for (final row in payments)
+            Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Text(customerName(row), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
+                        Text(money(_toDouble(row['amount'])), style: const TextStyle(fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text('Data: ${formatDate(row['payment_date'] ?? row['created_at'])}'),
+                    Text('Método: ${row['method'] ?? 'manual'}'),
+                    if ((row['note'] ?? '').toString().trim().isNotEmpty) Text('Obs: ${row['note']}'),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: OutlinedButton.icon(
+                        onPressed: () => showReceiptPreview(row),
+                        icon: const Icon(Icons.receipt_long_outlined),
+                        label: const Text('Recibo'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 80),
+        ],
+      ),
     );
   }
 }
 
-class ReceiptsPage extends StatelessWidget {
+class ReceiptsPage extends StatefulWidget {
   const ReceiptsPage({super.key});
 
   @override
+  State<ReceiptsPage> createState() => _ReceiptsPageState();
+}
+
+class _ReceiptsPageState extends State<ReceiptsPage> {
+  bool loading = true;
+  String? error;
+  List<Map<String, dynamic>> receipts = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    loadReceipts();
+  }
+
+  Future<void> loadReceipts() async {
+    final client = supabaseOrNull;
+    if (client == null) {
+      setState(() {
+        loading = false;
+        receipts = const [];
+      });
+      return;
+    }
+
+    setState(() {
+      loading = true;
+      error = null;
+    });
+
+    try {
+      final loaded = await client
+          .from('receipts')
+          .select('id, receipt_number, customer_name, amount, payment_date, created_at, notes')
+          .order('created_at', ascending: false)
+          .limit(100);
+
+      if (!mounted) return;
+      setState(() {
+        receipts = loaded.map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row)).toList();
+        loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+        error = 'Não foi possível carregar os recibos.';
+      });
+    }
+  }
+
+  void showReceipt(Map<String, dynamic> row) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Recibo ${row['receipt_number'] ?? ''}'.trim()),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Cliente: ${row['customer_name'] ?? 'Cliente'}'),
+            Text('Valor: ${money(_toDouble(row['amount']))}'),
+            Text('Data: ${formatDate(row['payment_date'] ?? row['created_at'])}'),
+            if ((row['notes'] ?? '').toString().trim().isNotEmpty) Text('Obs: ${row['notes']}'),
+            const SizedBox(height: 12),
+            const Text('Próxima etapa: PDF, assinatura, WhatsApp e impressão.'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Fechar')),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const _RemoteListPage(
-      title: 'Recibos',
-      icon: Icons.receipt_long_outlined,
-      table: 'receipts',
-      select: 'id, receipt_number, customer_name, amount, created_at',
-      emptyText: 'Nenhum recibo encontrado.',
-      fields: ['receipt_number', 'customer_name', 'amount', 'created_at'],
-      fallback: [
-        _ActionInfo('Recibos numerados', 'Preparado para histórico e sequência de recibos.'),
-        _ActionInfo('PDF e compartilhamento', 'Fluxo preparado para PDF, WhatsApp e impressão.'),
-        _ActionInfo('Assinatura', 'Área reservada para assinatura do cliente no recibo.'),
-      ],
+    final total = receipts.fold<double>(0, (sum, row) => sum + _toDouble(row['amount']));
+
+    return RefreshIndicator(
+      onRefresh: loadReceipts,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _Header(title: 'Recibos', icon: Icons.receipt_long_outlined),
+          const SizedBox(height: 12),
+          _MetricRow(
+            leftTitle: 'Total em recibos',
+            leftValue: money(total),
+            rightTitle: 'Emitidos',
+            rightValue: receipts.length.toString(),
+          ),
+          const SizedBox(height: 12),
+          if (loading) const LinearProgressIndicator(),
+          if (error != null) _InfoCard(title: 'Atenção', text: error!),
+          if (!loading && receipts.isEmpty) ...[
+            const _InfoCard(title: 'Nenhum recibo encontrado.', text: 'Os recibos numerados aparecerão aqui após os pagamentos.'),
+            const _InfoCard(title: 'Modelo do original', text: 'Preparado para PDF, assinatura, envio por WhatsApp/e-mail e impressão.'),
+          ],
+          for (final row in receipts)
+            Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                leading: const Icon(Icons.receipt_long_outlined),
+                title: Text(row['receipt_number']?.toString() ?? 'Recibo'),
+                subtitle: Text('${row['customer_name'] ?? 'Cliente'} • ${formatDate(row['payment_date'] ?? row['created_at'])}'),
+                trailing: Text(money(_toDouble(row['amount'])), style: const TextStyle(fontWeight: FontWeight.w800)),
+                onTap: () => showReceipt(row),
+              ),
+            ),
+          const SizedBox(height: 80),
+        ],
+      ),
     );
   }
 }
@@ -266,8 +510,6 @@ class _CalculatorPageState extends State<CalculatorPage> {
     return double.tryParse(clean) ?? 0;
   }
 
-  String money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
-
   @override
   Widget build(BuildContext context) {
     final simulation = result;
@@ -301,28 +543,19 @@ class _CalculatorPageState extends State<CalculatorPage> {
                 TextField(
                   controller: principal,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Valor',
-                    hintText: 'Ex: 3500',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Valor', hintText: 'Ex: 3500'),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: installments,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Cotas',
-                    hintText: 'Ex: 5',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Cotas', hintText: 'Ex: 5'),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: rate,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Juros do crédito (%)',
-                    hintText: 'Ex: 30',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Juros do crédito (%)', hintText: 'Ex: 30'),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -348,7 +581,7 @@ class _CalculatorPageState extends State<CalculatorPage> {
         ),
         if (error != null) _InfoCard(title: 'Atenção', text: error!),
         if (simulation != null) ...[
-          _SimulationSummary(result: simulation, money: money),
+          _SimulationSummary(result: simulation),
           const SizedBox(height: 12),
           Text('Plano de parcelas', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
@@ -377,10 +610,9 @@ class _CalculatorPageState extends State<CalculatorPage> {
 }
 
 class _SimulationSummary extends StatelessWidget {
-  const _SimulationSummary({required this.result, required this.money});
+  const _SimulationSummary({required this.result});
 
   final _SimulationResult result;
-  final String Function(double value) money;
 
   @override
   Widget build(BuildContext context) {
@@ -568,6 +800,50 @@ class _DashboardLikePage extends StatelessWidget {
   }
 }
 
+class _MetricRow extends StatelessWidget {
+  const _MetricRow({required this.leftTitle, required this.leftValue, required this.rightTitle, required this.rightValue});
+
+  final String leftTitle;
+  final String leftValue;
+  final String rightTitle;
+  final String rightValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _SmallMetricCard(title: leftTitle, value: leftValue)),
+        const SizedBox(width: 8),
+        Expanded(child: _SmallMetricCard(title: rightTitle, value: rightValue)),
+      ],
+    );
+  }
+}
+
+class _SmallMetricCard extends StatelessWidget {
+  const _SmallMetricCard({required this.title, required this.value});
+
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 4),
+            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Header extends StatelessWidget {
   const _Header({required this.title, required this.icon});
 
@@ -598,14 +874,11 @@ class _InfoCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            Text(text),
-          ],
-        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text(text),
+        ]),
       ),
     );
   }
@@ -613,7 +886,22 @@ class _InfoCard extends StatelessWidget {
 
 class _ActionInfo {
   const _ActionInfo(this.title, this.text);
-
   final String title;
   final String text;
+}
+
+double _toDouble(dynamic value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+String money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
+
+String formatDate(dynamic value) {
+  final parsed = DateTime.tryParse(value?.toString() ?? '');
+  if (parsed == null) return '-';
+  final day = parsed.day.toString().padLeft(2, '0');
+  final month = parsed.month.toString().padLeft(2, '0');
+  final year = parsed.year.toString().padLeft(4, '0');
+  return '$day/$month/$year';
 }
