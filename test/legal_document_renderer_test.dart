@@ -20,13 +20,13 @@ void main() {
     const context = LegalDocumentContext(
       variables: {
         'customer.fullName': 'Cliente Teste',
-        'loan.amount': 'R$ 1.000,00',
+        'loan.amount': 'R\$ 1.000,00',
       },
     );
 
     final result = const LegalDocumentRenderer().render(template, context);
 
     expect(result.sections.single.title, 'Contrato de Cliente Teste');
-    expect(result.sections.single.body, 'Valor: R$ 1.000,00');
+    expect(result.sections.single.body, 'Valor: R\$ 1.000,00');
   });
 }
