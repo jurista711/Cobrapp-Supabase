@@ -23,65 +23,29 @@ class _PaymentsPageState extends State<PaymentsPage> {
   }
 
   Future<void> loadPayments() async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      setState(() {
-        loading = false;
-        payments = const [];
-      });
-      return;
-    }
-
     setState(() {
       loading = true;
       error = null;
     });
-
     try {
-      final loaded = await client
-          .from('payments')
-          .select('id, amount, principal_amount, interest_amount, late_interest_amount, payment_date, method, note, status, created_at, loans(id, customers(full_name, phone))')
-          .order('payment_date', ascending: false)
-          .limit(100);
-
+      final loaded = await supabaseRequired.rpc('cobrapp_app_list_payments');
       if (!mounted) return;
       setState(() {
-        payments = loaded.map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row)).toList();
+        payments = (loaded as List)
+            .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row as Map))
+            .toList();
         loading = false;
       });
     } catch (_) {
-      try {
-        final loaded = await client
-            .from('payments')
-            .select('id, amount, payment_date, method, note, status, created_at')
-            .order('payment_date', ascending: false)
-            .limit(100);
-
-        if (!mounted) return;
-        setState(() {
-          payments = loaded.map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row)).toList();
-          loading = false;
-        });
-      } catch (_) {
-        if (!mounted) return;
-        setState(() {
-          loading = false;
-          error = 'Não foi possível carregar os pagamentos.';
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+        error = 'Não foi possível carregar os pagamentos.';
+      });
     }
   }
 
-  String customerName(Map<String, dynamic> row) {
-    final loan = row['loans'];
-    if (loan is Map<String, dynamic>) {
-      final customer = loan['customers'];
-      if (customer is Map<String, dynamic>) {
-        return customer['full_name']?.toString() ?? 'Cliente';
-      }
-    }
-    return 'Cliente não informado';
-  }
+  String customerName(Map<String, dynamic> row) => row['customer_name']?.toString() ?? 'Cliente não informado';
 
   void showReceiptPreview(Map<String, dynamic> row) {
     showDialog<void>(
@@ -189,30 +153,17 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
   }
 
   Future<void> loadReceipts() async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      setState(() {
-        loading = false;
-        receipts = const [];
-      });
-      return;
-    }
-
     setState(() {
       loading = true;
       error = null;
     });
-
     try {
-      final loaded = await client
-          .from('receipts')
-          .select('id, receipt_number, customer_name, amount, payment_date, created_at, notes')
-          .order('created_at', ascending: false)
-          .limit(100);
-
+      final loaded = await supabaseRequired.rpc('cobrapp_app_list_receipts');
       if (!mounted) return;
       setState(() {
-        receipts = loaded.map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row)).toList();
+        receipts = (loaded as List)
+            .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row as Map))
+            .toList();
         loading = false;
       });
     } catch (_) {
