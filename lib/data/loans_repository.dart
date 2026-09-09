@@ -6,50 +6,28 @@ class LoansRepository {
   const LoansRepository();
 
   Future<List<LoanListItem>> listActiveLoans() async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      return const <LoanListItem>[];
-    }
-
-    final rows = await client
-        .from('loans')
-        .select('id, customer_id, amount, total_debt, total_interest, payments_number, start_date, end_date, status, customers(full_name)')
-        .order('created_at', ascending: false);
-
-    return rows
-        .map<LoanListItem>((row) => LoanListItem.fromJson(Map<String, dynamic>.from(row)))
+    final rows = await supabaseRequired.rpc('cobrapp_app_list_loans');
+    return (rows as List)
+        .map<LoanListItem>((row) => LoanListItem.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
   Future<LoanDetail> getLoanDetail(String loanId) async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      throw StateError('Supabase não configurado neste APK.');
-    }
-
-    final loanRow = await client
-        .from('loans')
-        .select('id, customer_id, amount, total_debt, total_interest, interest_rate, interest_type, payment_frequency, payments_number, start_date, end_date, late_interest_rate, days_of_grace, late_fee, note, status, customers(full_name, phone, identification)')
-        .eq('id', loanId)
-        .single();
-
-    final installmentRows = await client
-        .from('installments')
-        .select('id, loan_id, number, due_date, principal, interest, total, paid_amount, status')
-        .eq('loan_id', loanId)
-        .order('number', ascending: true);
-
-    final paymentRows = await client
-        .from('payments')
-        .select('id, loan_id, installment_id, payment_date, amount, method, note, created_at')
-        .eq('loan_id', loanId)
-        .order('payment_date', ascending: false);
-
-    return LoanDetail.fromJson(
-      Map<String, dynamic>.from(loanRow),
-      installmentRows.map<LoanInstallmentDetail>((row) => LoanInstallmentDetail.fromJson(Map<String, dynamic>.from(row))).toList(),
-      paymentRows.map<LoanPaymentDetail>((row) => LoanPaymentDetail.fromJson(Map<String, dynamic>.from(row))).toList(),
+    final response = await supabaseRequired.rpc(
+      'cobrapp_app_get_loan_detail',
+      params: {'p_loan_id': loanId},
     );
+    if (response == null) {
+      throw StateError('Empréstimo não encontrado.');
+    }
+    final json = Map<String, dynamic>.from(response as Map);
+    final installmentRows = (json['installments'] as List? ?? const <dynamic>[])
+        .map<LoanInstallmentDetail>((row) => LoanInstallmentDetail.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+    final paymentRows = (json['payments'] as List? ?? const <dynamic>[])
+        .map<LoanPaymentDetail>((row) => LoanPaymentDetail.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+    return LoanDetail.fromJson(json, installmentRows, paymentRows);
   }
 
   Future<void> registerPartialPayment({
@@ -59,53 +37,16 @@ class LoansRepository {
     String method = 'manual',
     String? note,
   }) async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      throw StateError('Supabase não configurado neste APK.');
-    }
-
-    final now = DateTime.now().toIso8601String();
-    final paymentDate = _date(DateTime.now());
-    final double installmentPart = amount > installment.remainingAmount ? installment.remainingAmount : amount;
-    final double latePart = amount - installmentPart > 0 ? amount - installmentPart : 0.0;
-    final double paidAmount = installment.paidAmount + installmentPart;
-    final newStatus = paidAmount + 0.009 >= installment.total ? 'paid' : 'pending';
-    final double cappedPaidAmount = paidAmount > installment.total ? installment.total : paidAmount;
-
-    await client.from('payments').insert({
-      'loan_id': installment.loanId,
-      'installment_id': installment.id,
-      'amount': _money(amount),
-      'principal_amount': _money(installmentPart),
-      'interest_amount': 0,
-      'late_interest_amount': _money(latePart > lateCharge ? lateCharge : latePart),
-      'payment_date': paymentDate,
-      'method': method,
-      'note': note,
-    });
-
-    await client
-        .from('installments')
-        .update({
-          'paid_amount': _money(cappedPaidAmount),
-          'status': newStatus,
-          'updated_at': now,
-        })
-        .eq('id', installment.id);
-
-    final pendingRows = await client
-        .from('installments')
-        .select('id')
-        .eq('loan_id', installment.loanId)
-        .neq('status', 'paid')
-        .limit(1);
-
-    if (pendingRows.isEmpty) {
-      await client
-          .from('loans')
-          .update({'status': 'completed', 'updated_at': now})
-          .eq('id', installment.loanId);
-    }
+    await supabaseRequired.rpc(
+      'cobrapp_app_register_payment',
+      params: {
+        'p_installment_id': installment.id,
+        'p_amount': _money(amount),
+        'p_late_charge': _money(lateCharge),
+        'p_method': method,
+        'p_note': note,
+      },
+    );
   }
 
   Future<String> createLoan({
@@ -114,54 +55,36 @@ class LoansRepository {
     required LoanCalculationResult result,
     String? note,
   }) async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      throw StateError('Supabase não configurado neste APK.');
-    }
-
-    final loanRow = await client
-        .from('loans')
-        .insert({
-          'customer_id': customerId,
-          'amount': _money(input.principal),
-          'interest_rate': input.interestRatePercent,
-          'interest_type': input.interestType.toDatabaseValue(),
-          'payments_number': input.paymentsNumber,
-          'payment_frequency': input.paymentFrequency.toDatabaseValue(),
-          'start_date': _date(input.startDate),
-          'end_date': _date(result.endDate),
-          'total_interest': _money(result.totalInterest),
-          'total_debt': _money(result.totalDebt),
-          'late_interest_rate': 0,
-          'days_of_grace': 0,
-          'late_fee': 0,
-          'note': note,
-          'status': 'active',
-        })
-        .select('id')
-        .single();
-
-    final loanId = loanRow['id'].toString();
-
-    final installmentRows = result.installments
+    final installments = result.installments
         .map(
           (installment) => {
-            'loan_id': loanId,
             'number': installment.number,
             'due_date': _date(installment.dueDate),
             'principal': _money(installment.principal),
             'interest': _money(installment.interest),
             'total': _money(installment.total),
-            'status': 'pending',
           },
         )
         .toList();
 
-    if (installmentRows.isNotEmpty) {
-      await client.from('installments').insert(installmentRows);
-    }
-
-    return loanId;
+    final loanId = await supabaseRequired.rpc(
+      'cobrapp_app_create_loan',
+      params: {
+        'p_customer_id': customerId,
+        'p_principal': _money(input.principal),
+        'p_interest_rate': input.interestRatePercent,
+        'p_interest_type': input.interestType.toDatabaseValue(),
+        'p_payments_number': input.paymentsNumber,
+        'p_payment_frequency': input.paymentFrequency.toDatabaseValue(),
+        'p_start_date': _date(input.startDate),
+        'p_end_date': _date(result.endDate),
+        'p_total_interest': _money(result.totalInterest),
+        'p_total_debt': _money(result.totalDebt),
+        'p_note': note,
+        'p_installments': installments,
+      },
+    );
+    return loanId.toString();
   }
 
   String _date(DateTime date) {
@@ -396,7 +319,7 @@ class LoanListItem {
 
   factory LoanListItem.fromJson(Map<String, dynamic> json) {
     final customer = json['customers'];
-    String customerName = 'Cliente';
+    String customerName = json['customer_name']?.toString() ?? 'Cliente';
     if (customer is Map<String, dynamic>) {
       customerName = customer['full_name']?.toString() ?? customerName;
     }
