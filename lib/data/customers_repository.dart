@@ -4,20 +4,11 @@ import '../domain/loan_models.dart';
 class CustomersRepository {
   const CustomersRepository();
 
-  static const _fields =
-      'id, user_id, name, phone, document, address, notes, created_at';
-
   Future<List<Customer>> listCustomers() async {
-    final ownerId = currentOwnerUserId;
+    final rows = await supabaseRequired.rpc('cobrapp_app_list_customers');
 
-    final rows = await supabaseRequired
-        .from('cobrapp_customers')
-        .select(_fields)
-        .eq('user_id', ownerId)
-        .order('name');
-
-    return rows
-        .map<Customer>((row) => _customerFromJson(Map<String, dynamic>.from(row)))
+    return (rows as List)
+        .map<Customer>((row) => _customerFromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
@@ -29,22 +20,23 @@ class CustomersRepository {
     String? address,
     String? notes,
   }) async {
-    final ownerId = currentOwnerUserId;
+    final rows = await supabaseRequired.rpc(
+      'cobrapp_app_create_customer',
+      params: {
+        'p_name': fullName,
+        'p_document': identification,
+        'p_phone': phone,
+        'p_address': address,
+        'p_notes': notes,
+      },
+    );
 
-    final row = await supabaseRequired
-        .from('cobrapp_customers')
-        .insert({
-          'user_id': ownerId,
-          'name': fullName,
-          'document': identification,
-          'phone': phone,
-          'address': address,
-          'notes': notes,
-        })
-        .select(_fields)
-        .single();
+    final list = rows as List;
+    if (list.isEmpty) {
+      throw StateError('O Supabase não retornou o cliente criado.');
+    }
 
-    return _customerFromJson(Map<String, dynamic>.from(row));
+    return _customerFromJson(Map<String, dynamic>.from(list.first as Map));
   }
 
   Future<Customer> updateCustomer({
@@ -56,32 +48,31 @@ class CustomersRepository {
     String? address,
     String? notes,
   }) async {
-    final ownerId = currentOwnerUserId;
+    final rows = await supabaseRequired.rpc(
+      'cobrapp_app_update_customer',
+      params: {
+        'p_id': id,
+        'p_name': fullName,
+        'p_document': identification,
+        'p_phone': phone,
+        'p_address': address,
+        'p_notes': notes,
+      },
+    );
 
-    final row = await supabaseRequired
-        .from('cobrapp_customers')
-        .update({
-          'name': fullName,
-          'document': identification,
-          'phone': phone,
-          'address': address,
-          'notes': notes,
-        })
-        .eq('id', id)
-        .eq('user_id', ownerId)
-        .select(_fields)
-        .single();
+    final list = rows as List;
+    if (list.isEmpty) {
+      throw StateError('Cliente não encontrado para atualizar.');
+    }
 
-    return _customerFromJson(Map<String, dynamic>.from(row));
+    return _customerFromJson(Map<String, dynamic>.from(list.first as Map));
   }
 
   Future<void> deleteCustomer(String id) async {
-    final ownerId = currentOwnerUserId;
-    await supabaseRequired
-        .from('cobrapp_customers')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', ownerId);
+    await supabaseRequired.rpc(
+      'cobrapp_app_delete_customer',
+      params: {'p_id': id},
+    );
   }
 
   Future<void> deactivateCustomer(String id) async {
