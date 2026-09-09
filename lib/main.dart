@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'core/supabase_config.dart';
+import 'features/activation/activation_page.dart';
 import 'features/cash/cash_page.dart';
 import 'features/collections/collections_page.dart';
 import 'features/customers/customers_page.dart';
@@ -76,7 +77,10 @@ class CobrApp extends StatelessWidget {
           labelStyle: const TextStyle(color: Color(0xFFD8CCFF)),
         ),
       ),
-      home: HomePage(bootstrapError: bootstrapError),
+      home: ActivationGate(
+        bootstrapError: bootstrapError,
+        child: HomePage(bootstrapError: bootstrapError),
+      ),
     );
   }
 }
