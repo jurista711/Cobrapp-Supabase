@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'core/supabase_config.dart';
 import 'features/collections/collections_page.dart';
 import 'features/customers/customers_page.dart';
+import 'features/documents/documents_page.dart';
 import 'features/loans/loans_page.dart';
 
 Future<void> main() async {
@@ -62,7 +63,7 @@ class _HomePageState extends State<HomePage> {
     const CustomersPage(),
     const LoansPage(),
     const CollectionsPage(),
-    const _PlaceholderPage(title: 'Documentos', icon: Icons.description_outlined),
+    const DocumentsPage(),
   ];
 
   @override
