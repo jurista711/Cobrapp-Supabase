@@ -1,10 +1,10 @@
-import '../core/supabase_config.dart';
+import '../core/licensed_rpc.dart';
 
 class DocumentsRepository {
   const DocumentsRepository();
 
   Future<List<DocumentListItem>> listDocuments() async {
-    final rows = await supabaseRequired.rpc('cobrapp_app_list_documents');
+    final rows = await licensedRpc('cobrapp_app_list_documents');
     return (rows as List)
         .map<DocumentListItem>((row) => DocumentListItem.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
@@ -17,7 +17,7 @@ class DocumentsRepository {
     String? customerId,
     String? loanId,
   }) async {
-    await supabaseRequired.rpc(
+    await licensedRpc(
       'cobrapp_app_create_document',
       params: {
         'p_title': title,
@@ -59,9 +59,7 @@ class DocumentListItem {
   }
 
   static double _toDouble(dynamic value) {
-    if (value is num) {
-      return value.toDouble();
-    }
+    if (value is num) return value.toDouble();
     return double.tryParse(value.toString()) ?? 0;
   }
 }
