@@ -18,7 +18,7 @@ class PaymentsPage extends StatelessWidget {
       fields: ['amount', 'payment_date', 'method', 'status'],
       fallback: [
         _ActionInfo('Histórico de pagamentos', 'Lista pagamentos registrados no Supabase.'),
-        _ActionInfo('Baixa de parcela', 'A baixa será ligada ao fluxo de cobrança e empréstimo.'),
+        _ActionInfo('Baixa de parcela', 'Baixa ligada ao fluxo de cobrança e empréstimo.'),
         _ActionInfo('Recibo', 'Cada pagamento poderá gerar recibo numerado.'),
       ],
     );
@@ -113,9 +113,9 @@ class CalculatorPage extends StatefulWidget {
 }
 
 class _CalculatorPageState extends State<CalculatorPage> {
-  final principal = TextEditingController(text: '3500');
-  final installments = TextEditingController(text: '5');
-  final rate = TextEditingController(text: '30');
+  final principal = TextEditingController();
+  final installments = TextEditingController();
+  final rate = TextEditingController();
 
   CalculatorInterestMode mode = CalculatorInterestMode.initialCapital;
   _SimulationResult? result;
@@ -251,6 +251,16 @@ class _CalculatorPageState extends State<CalculatorPage> {
     }
   }
 
+  void clearFields() {
+    principal.clear();
+    installments.clear();
+    rate.clear();
+    setState(() {
+      result = null;
+      error = null;
+    });
+  }
+
   double _parseMoney(String value) {
     final clean = value.replaceAll('R\$', '').replaceAll('.', '').replaceAll(',', '.').trim();
     return double.tryParse(clean) ?? 0;
@@ -290,26 +300,47 @@ class _CalculatorPageState extends State<CalculatorPage> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: principal,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Valor'),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Valor',
+                    hintText: 'Ex: 3500',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: installments,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Cotas'),
+                  decoration: const InputDecoration(
+                    labelText: 'Cotas',
+                    hintText: 'Ex: 5',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: rate,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Juros do crédito (%)'),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Juros do crédito (%)',
+                    hintText: 'Ex: 30',
+                  ),
                 ),
                 const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: calculate,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Ver simulação'),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: calculate,
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('Ver simulação'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: clearFields,
+                      icon: const Icon(Icons.cleaning_services_outlined),
+                      label: const Text('Limpar'),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -420,7 +451,15 @@ class SettingsPage extends StatelessWidget {
 }
 
 class _RemoteListPage extends StatefulWidget {
-  const _RemoteListPage({required this.title, required this.icon, required this.table, required this.select, required this.emptyText, required this.fields, required this.fallback});
+  const _RemoteListPage({
+    required this.title,
+    required this.icon,
+    required this.table,
+    required this.select,
+    required this.emptyText,
+    required this.fields,
+    required this.fallback,
+  });
 
   final String title;
   final IconData icon;
@@ -559,11 +598,14 @@ class _InfoCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 6),
-          Text(text),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text(text),
+          ],
+        ),
       ),
     );
   }
@@ -571,6 +613,7 @@ class _InfoCard extends StatelessWidget {
 
 class _ActionInfo {
   const _ActionInfo(this.title, this.text);
+
   final String title;
   final String text;
 }
