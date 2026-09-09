@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'core/supabase_config.dart';
 import 'domain/loan_models.dart';
+import 'features/customers/customers_page.dart';
 import 'services/loan_calculator.dart';
 
 Future<void> main() async {
@@ -59,7 +60,7 @@ class _HomePageState extends State<HomePage> {
 
   late final pages = <Widget>[
     const _PlaceholderPage(title: 'Início', icon: Icons.dashboard_outlined),
-    const _PlaceholderPage(title: 'Clientes', icon: Icons.people_outline),
+    const CustomersPage(),
     const LoanCalculatorPage(),
     const _PlaceholderPage(title: 'Cobranças', icon: Icons.event_available_outlined),
     const _PlaceholderPage(title: 'Documentos', icon: Icons.description_outlined),
