@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/supabase_config.dart';
+import '../../core/licensed_rpc.dart';
 
 class CashPage extends StatefulWidget {
   const CashPage({super.key});
@@ -31,7 +31,7 @@ class _CashPageState extends State<CashPage> {
     });
 
     try {
-      final response = await supabaseRequired.rpc('cobrapp_app_cash_summary');
+      final response = await licensedRpc('cobrapp_app_cash_summary');
       final map = Map<String, dynamic>.from(response as Map);
       if (!mounted) return;
       setState(() {
