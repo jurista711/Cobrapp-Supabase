@@ -4,18 +4,9 @@ class DocumentsRepository {
   const DocumentsRepository();
 
   Future<List<DocumentListItem>> listDocuments() async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      return const <DocumentListItem>[];
-    }
-
-    final rows = await client
-        .from('generated_documents')
-        .select('id, title, document_type, created_at, customers(full_name), loans(total_debt)')
-        .order('created_at', ascending: false);
-
-    return rows
-        .map<DocumentListItem>((row) => DocumentListItem.fromJson(Map<String, dynamic>.from(row)))
+    final rows = await supabaseRequired.rpc('cobrapp_app_list_documents');
+    return (rows as List)
+        .map<DocumentListItem>((row) => DocumentListItem.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
@@ -26,21 +17,16 @@ class DocumentsRepository {
     String? customerId,
     String? loanId,
   }) async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      throw StateError('Supabase não configurado neste APK.');
-    }
-
-    await client.from('generated_documents').insert({
-      'customer_id': customerId,
-      'loan_id': loanId,
-      'title': title,
-      'document_type': documentType,
-      'snapshot': {
-        'body': body,
-        'generated_by': 'cobrapp_supabase',
+    await supabaseRequired.rpc(
+      'cobrapp_app_create_document',
+      params: {
+        'p_title': title,
+        'p_document_type': documentType,
+        'p_body': body,
+        'p_customer_id': customerId,
+        'p_loan_id': loanId,
       },
-    });
+    );
   }
 }
 
@@ -62,18 +48,13 @@ class DocumentListItem {
   final double totalDebt;
 
   factory DocumentListItem.fromJson(Map<String, dynamic> json) {
-    final customer = json['customers'];
-    final loan = json['loans'];
-
     return DocumentListItem(
       id: json['id'].toString(),
       title: json['title']?.toString() ?? 'Documento',
       documentType: json['document_type']?.toString() ?? 'documento',
       createdAt: DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now(),
-      customerName: customer is Map<String, dynamic>
-          ? customer['full_name']?.toString() ?? 'Cliente'
-          : 'Cliente',
-      totalDebt: loan is Map<String, dynamic> ? _toDouble(loan['total_debt']) : 0,
+      customerName: json['customer_name']?.toString() ?? 'Cliente',
+      totalDebt: _toDouble(json['total_debt']),
     );
   }
 
