@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'core/supabase_config.dart';
 import 'features/collections/collections_page.dart';
 import 'features/customers/customers_page.dart';
+import 'features/dashboard/dashboard_page.dart';
 import 'features/documents/documents_page.dart';
 import 'features/loans/loans_page.dart';
 
@@ -59,7 +60,7 @@ class _HomePageState extends State<HomePage> {
   int index = 0;
 
   late final pages = <Widget>[
-    const _PlaceholderPage(title: 'Início', icon: Icons.dashboard_outlined),
+    const DashboardPage(),
     const CustomersPage(),
     const LoansPage(),
     const CollectionsPage(),
@@ -115,27 +116,6 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.description_outlined),
             label: 'Documentos',
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({required this.title, required this.icon});
-
-  final String title;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 56),
-          const SizedBox(height: 12),
-          Text(title, style: Theme.of(context).textTheme.headlineSmall),
         ],
       ),
     );
