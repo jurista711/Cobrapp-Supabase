@@ -6,17 +6,21 @@ const _supabasePublishableKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 bool get hasSupabaseConfig =>
     _supabaseUrl.isNotEmpty && _supabasePublishableKey.isNotEmpty;
 
-Future<void> initSupabase() async {
+Future<bool> initSupabase() async {
   if (!hasSupabaseConfig) {
-    throw StateError(
-      'SUPABASE_URL e SUPABASE_ANON_KEY são obrigatórios via --dart-define.',
-    );
+    return false;
   }
 
   await Supabase.initialize(
     url: _supabaseUrl,
     publishableKey: _supabasePublishableKey,
   );
+  return true;
 }
 
-SupabaseClient get supabase => Supabase.instance.client;
+SupabaseClient? get supabaseOrNull {
+  if (!hasSupabaseConfig) {
+    return null;
+  }
+  return Supabase.instance.client;
+}
