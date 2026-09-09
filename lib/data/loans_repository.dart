@@ -29,7 +29,7 @@ class LoansRepository {
 
     final loanRow = await client
         .from('loans')
-        .select('id, customer_id, amount, total_debt, total_interest, interest_rate, interest_type, payment_frequency, payments_number, start_date, end_date, note, status, customers(full_name, phone, identification)')
+        .select('id, customer_id, amount, total_debt, total_interest, interest_rate, interest_type, payment_frequency, payments_number, start_date, end_date, late_interest_rate, days_of_grace, late_fee, note, status, customers(full_name, phone, identification)')
         .eq('id', loanId)
         .single();
 
@@ -55,6 +55,7 @@ class LoansRepository {
   Future<void> registerPartialPayment({
     required LoanInstallmentDetail installment,
     required double amount,
+    double lateCharge = 0,
     String method = 'manual',
     String? note,
   }) async {
@@ -64,7 +65,9 @@ class LoansRepository {
     }
 
     final now = DateTime.now().toIso8601String();
-    final paidAmount = installment.paidAmount + amount;
+    final installmentPart = amount > installment.remainingAmount ? installment.remainingAmount : amount;
+    final latePart = amount - installmentPart > 0 ? amount - installmentPart : 0;
+    final paidAmount = installment.paidAmount + installmentPart;
     final newStatus = paidAmount + 0.009 >= installment.total ? 'paid' : 'pending';
     final cappedPaidAmount = paidAmount > installment.total ? installment.total : paidAmount;
 
@@ -73,9 +76,9 @@ class LoansRepository {
       'installment_id': installment.id,
       'paid_at': now,
       'total_paid': _money(amount),
-      'principal_paid': _money(amount),
+      'principal_paid': _money(installmentPart),
       'interest_paid': 0,
-      'late_interest_paid': 0,
+      'late_interest_paid': _money(latePart > lateCharge ? lateCharge : latePart),
       'extra_capital_paid': 0,
       'method': method,
       'note': note,
@@ -129,6 +132,9 @@ class LoansRepository {
           'end_date': _date(result.endDate),
           'total_interest': _money(result.totalInterest),
           'total_debt': _money(result.totalDebt),
+          'late_interest_rate': 0,
+          'days_of_grace': 0,
+          'late_fee': 0,
           'note': note,
           'status': 'active',
         })
@@ -184,6 +190,9 @@ class LoanDetail {
     required this.paymentsNumber,
     required this.startDate,
     required this.endDate,
+    required this.lateInterestRate,
+    required this.daysOfGrace,
+    required this.lateFee,
     this.note,
     required this.status,
     required this.installments,
@@ -204,6 +213,9 @@ class LoanDetail {
   final int paymentsNumber;
   final DateTime startDate;
   final DateTime endDate;
+  final double lateInterestRate;
+  final int daysOfGrace;
+  final double lateFee;
   final String? note;
   final String status;
   final List<LoanInstallmentDetail> installments;
@@ -214,6 +226,18 @@ class LoanDetail {
   int get pendingCount => installments.where((item) => item.status != 'paid').length;
   int get paidCount => installments.where((item) => item.status == 'paid').length;
   int get overdueCount => installments.where((item) => item.isOverdue && item.status != 'paid').length;
+
+  double lateChargeFor(LoanInstallmentDetail installment) {
+    if (installment.isPaid || !installment.isOverdue) return 0;
+    final billableDays = installment.daysLate - daysOfGrace;
+    if (billableDays <= 0) return 0;
+    final dailyLateInterest = installment.remainingAmount * (lateInterestRate / 100) * billableDays;
+    return lateFee + dailyLateInterest;
+  }
+
+  double updatedRemainingFor(LoanInstallmentDetail installment) {
+    return installment.remainingAmount + lateChargeFor(installment);
+  }
 
   factory LoanDetail.fromJson(
     Map<String, dynamic> json,
@@ -246,6 +270,9 @@ class LoanDetail {
       paymentsNumber: int.tryParse(json['payments_number'].toString()) ?? 0,
       startDate: DateTime.tryParse(json['start_date'].toString()) ?? DateTime.now(),
       endDate: DateTime.tryParse(json['end_date'].toString()) ?? DateTime.now(),
+      lateInterestRate: _toDouble(json['late_interest_rate']),
+      daysOfGrace: int.tryParse(json['days_of_grace'].toString()) ?? 0,
+      lateFee: _toDouble(json['late_fee']),
       note: json['note']?.toString(),
       status: json['status']?.toString() ?? 'active',
       installments: installments,
@@ -284,12 +311,14 @@ class LoanInstallmentDetail {
 
   bool get isPaid => status == 'paid';
 
-  bool get isOverdue {
+  int get daysLate {
     final today = DateTime.now();
     final cleanToday = DateTime(today.year, today.month, today.day);
     final cleanDue = DateTime(dueDate.year, dueDate.month, dueDate.day);
-    return cleanDue.isBefore(cleanToday);
+    return cleanToday.difference(cleanDue).inDays < 0 ? 0 : cleanToday.difference(cleanDue).inDays;
   }
+
+  bool get isOverdue => daysLate > 0;
 
   factory LoanInstallmentDetail.fromJson(Map<String, dynamic> json) {
     return LoanInstallmentDetail(
