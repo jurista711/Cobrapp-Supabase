@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/supabase_config.dart';
+import '../../data/customers_repository.dart';
 import '../../domain/loan_models.dart';
 
 class CustomersPage extends StatefulWidget {
@@ -10,6 +12,7 @@ class CustomersPage extends StatefulWidget {
 }
 
 class _CustomersPageState extends State<CustomersPage> {
+  final repository = const CustomersRepository();
   final nameController = TextEditingController();
   final documentController = TextEditingController();
   final phoneController = TextEditingController();
@@ -19,6 +22,15 @@ class _CustomersPageState extends State<CustomersPage> {
 
   final customers = <Customer>[];
   String query = '';
+  String? loadError;
+  bool loading = false;
+  bool saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    loadCustomers();
+  }
 
   @override
   void dispose() {
@@ -31,7 +43,36 @@ class _CustomersPageState extends State<CustomersPage> {
     super.dispose();
   }
 
-  void saveCustomer() {
+  Future<void> loadCustomers() async {
+    if (!hasSupabaseConfig) {
+      setState(() {
+        loadError = 'Supabase não configurado neste APK. Informe as chaves no build para salvar online.';
+      });
+      return;
+    }
+
+    setState(() {
+      loading = true;
+      loadError = null;
+    });
+
+    try {
+      final loaded = await repository.listCustomers();
+      if (!mounted) return;
+      setState(() {
+        customers
+          ..clear()
+          ..addAll(loaded);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => loadError = 'Não foi possível carregar clientes do Supabase.');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> saveCustomer() async {
     final name = nameController.text.trim();
     final document = documentController.text.trim();
 
@@ -42,28 +83,73 @@ class _CustomersPageState extends State<CustomersPage> {
       return;
     }
 
-    setState(() {
-      customers.insert(
-        0,
-        Customer(
+    setState(() => saving = true);
+
+    try {
+      late final Customer customer;
+      if (hasSupabaseConfig) {
+        customer = await repository.createCustomer(
+          fullName: name,
+          identification: document,
+          phone: _optional(phoneController.text),
+          email: _optional(emailController.text),
+          address: _optional(addressController.text),
+        );
+      } else {
+        customer = Customer(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
           fullName: name,
           identification: document,
           phone: _optional(phoneController.text),
           email: _optional(emailController.text),
           address: _optional(addressController.text),
+        );
+      }
+
+      if (!mounted) return;
+      setState(() {
+        customers.insert(0, customer);
+        nameController.clear();
+        documentController.clear();
+        phoneController.clear();
+        emailController.clear();
+        addressController.clear();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            hasSupabaseConfig
+                ? 'Cliente salvo no Supabase.'
+                : 'Cliente adicionado só para validação deste APK.',
+          ),
         ),
       );
-      nameController.clear();
-      documentController.clear();
-      phoneController.clear();
-      emailController.clear();
-      addressController.clear();
-    });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro ao salvar cliente. Verifique documento duplicado ou conexão.')),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cliente adicionado para validação.')),
-    );
+  Future<void> removeCustomer(Customer customer) async {
+    final oldIndex = customers.indexOf(customer);
+    setState(() => customers.remove(customer));
+
+    try {
+      if (hasSupabaseConfig) {
+        await repository.deactivateCustomer(customer.id);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => customers.insert(oldIndex < 0 ? 0 : oldIndex, customer));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível remover o cliente.')),
+      );
+    }
   }
 
   String? _optional(String value) {
@@ -94,7 +180,16 @@ class _CustomersPageState extends State<CustomersPage> {
         const Text(
           'Cadastro base para vincular empréstimos, cobranças, pagamentos e documentos.',
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        if (loadError != null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(loadError!),
+            ),
+          ),
+        if (loading) const LinearProgressIndicator(),
+        const SizedBox(height: 12),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -133,9 +228,15 @@ class _CustomersPageState extends State<CustomersPage> {
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed: saveCustomer,
-                  icon: const Icon(Icons.person_add_alt_1),
-                  label: const Text('Salvar cliente'),
+                  onPressed: saving ? null : saveCustomer,
+                  icon: saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.person_add_alt_1),
+                  label: Text(saving ? 'Salvando...' : 'Salvar cliente'),
                 ),
               ],
             ),
@@ -189,7 +290,7 @@ class _CustomersPageState extends State<CustomersPage> {
                 trailing: IconButton(
                   tooltip: 'Remover cliente',
                   icon: const Icon(Icons.delete_outline),
-                  onPressed: () => setState(() => customers.remove(customer)),
+                  onPressed: () => removeCustomer(customer),
                 ),
               ),
             ),
