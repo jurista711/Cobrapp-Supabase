@@ -25,57 +25,21 @@ class _CashPageState extends State<CashPage> {
   }
 
   Future<void> loadCash() async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      setState(() => error = 'Supabase não configurado neste APK.');
-      return;
-    }
-
     setState(() {
       loading = true;
       error = null;
     });
 
     try {
-      final now = DateTime.now();
-      final today = _date(now);
-      final monthStart = _date(DateTime(now.year, now.month, 1));
-
-      final todayRows = await client
-          .from('payments')
-          .select('amount, total_paid, payment_date, paid_at')
-          .or('payment_date.eq.$today,paid_at.gte.${today}T00:00:00')
-          .order('created_at', ascending: false);
-
-      final monthRows = await client
-          .from('payments')
-          .select('amount, total_paid, payment_date, paid_at')
-          .or('payment_date.gte.$monthStart,paid_at.gte.${monthStart}T00:00:00')
-          .order('created_at', ascending: false);
-
-      final installmentRows = await client
-          .from('installments')
-          .select('total, amount, paid_amount, due_date, status')
-          .neq('status', 'paid');
-
-      double openTotal = 0;
-      int overdue = 0;
-      for (final row in installmentRows) {
-        final map = Map<String, dynamic>.from(row as Map);
-        final total = _toDouble(map['total'] ?? map['amount']);
-        final paid = _toDouble(map['paid_amount']);
-        openTotal += (total - paid).clamp(0, double.infinity).toDouble();
-        final due = map['due_date']?.toString() ?? '';
-        if (due.compareTo(today) < 0) overdue++;
-      }
-
+      final response = await supabaseRequired.rpc('cobrapp_app_cash_summary');
+      final map = Map<String, dynamic>.from(response as Map);
       if (!mounted) return;
       setState(() {
-        receivedToday = _sumPayments(todayRows);
-        receivedMonth = _sumPayments(monthRows);
-        paymentsToday = todayRows.length;
-        pending = openTotal;
-        overdueInstallments = overdue;
+        receivedToday = _toDouble(map['received_today']);
+        receivedMonth = _toDouble(map['received_month']);
+        paymentsToday = _toInt(map['payments_today']);
+        pending = _toDouble(map['pending']);
+        overdueInstallments = _toInt(map['overdue_installments']);
         loading = false;
       });
     } catch (_) {
@@ -87,23 +51,14 @@ class _CashPageState extends State<CashPage> {
     }
   }
 
-  double _sumPayments(List<dynamic> rows) {
-    return rows.fold<double>(0, (sum, row) {
-      final map = Map<String, dynamic>.from(row as Map);
-      return sum + _toDouble(map['amount'] ?? map['total_paid']);
-    });
-  }
-
   double _toDouble(dynamic value) {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
-  String _date(DateTime date) {
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   String _money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
@@ -118,9 +73,7 @@ class _CashPageState extends State<CashPage> {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text('Caixa', style: Theme.of(context).textTheme.headlineSmall),
-              ),
+              Expanded(child: Text('Caixa', style: Theme.of(context).textTheme.headlineSmall)),
               IconButton(
                 onPressed: loading ? null : loadCash,
                 icon: loading
@@ -131,12 +84,7 @@ class _CashPageState extends State<CashPage> {
           ),
           const SizedBox(height: 8),
           if (error != null)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(error!),
-              ),
-            ),
+            Card(child: Padding(padding: const EdgeInsets.all(12), child: Text(error!))),
           const SizedBox(height: 12),
           _CashCard(title: 'Recebido hoje', value: _money(receivedToday), icon: Icons.payments_outlined),
           const SizedBox(height: 12),
