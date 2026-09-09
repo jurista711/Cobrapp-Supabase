@@ -4,62 +4,18 @@ class CollectionsRepository {
   const CollectionsRepository();
 
   Future<List<CollectionInstallment>> listPendingInstallments() async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      return const <CollectionInstallment>[];
-    }
-
-    final rows = await client
-        .from('installments')
-        .select('id, loan_id, number, due_date, principal, interest, total, paid_amount, status, loans(id, customer_id, customers(full_name, phone, identification))')
-        .eq('status', 'pending')
-        .order('due_date', ascending: true);
-
-    return rows
-        .map<CollectionInstallment>((row) => CollectionInstallment.fromJson(Map<String, dynamic>.from(row)))
+    final rows = await supabaseRequired.rpc('cobrapp_app_list_pending_installments');
+    return (rows as List)
+        .map<CollectionInstallment>((row) => CollectionInstallment.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
   Future<void> markInstallmentPaid(CollectionInstallment installment) async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      throw StateError('Supabase não configurado neste APK.');
-    }
-
-    final now = DateTime.now().toIso8601String();
-    final paymentDate = _date(DateTime.now());
-    final remaining = installment.remainingAmount;
-
-    await client.from('payments').insert({
-      'loan_id': installment.loanId,
-      'installment_id': installment.id,
-      'amount': _money(remaining),
-      'principal_amount': _money(installment.principal),
-      'interest_amount': _money(installment.interest),
-      'late_interest_amount': 0,
-      'payment_date': paymentDate,
-      'method': 'manual',
-      'note': 'Pagamento registrado pela tela Cobranças',
-    });
-
-    await client
-        .from('installments')
-        .update({
-          'paid_amount': _money(installment.total),
-          'status': 'paid',
-          'updated_at': now,
-        })
-        .eq('id', installment.id);
+    await supabaseRequired.rpc(
+      'cobrapp_app_mark_installment_paid',
+      params: {'p_installment_id': installment.id},
+    );
   }
-
-  String _date(DateTime date) {
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
-  }
-
-  double _money(double value) => double.parse(value.toStringAsFixed(2));
 }
 
 class CollectionInstallment {
@@ -112,21 +68,9 @@ class CollectionInstallment {
   }
 
   factory CollectionInstallment.fromJson(Map<String, dynamic> json) {
-    final loan = json['loans'];
-    Map<String, dynamic>? customer;
-    String loanId = json['loan_id'].toString();
-
-    if (loan is Map<String, dynamic>) {
-      loanId = loan['id']?.toString() ?? loanId;
-      final rawCustomer = loan['customers'];
-      if (rawCustomer is Map<String, dynamic>) {
-        customer = rawCustomer;
-      }
-    }
-
     return CollectionInstallment(
       id: json['id'].toString(),
-      loanId: loanId,
+      loanId: json['loan_id'].toString(),
       number: int.tryParse(json['number'].toString()) ?? 0,
       dueDate: DateTime.tryParse(json['due_date'].toString()) ?? DateTime.now(),
       principal: _toDouble(json['principal']),
@@ -134,9 +78,9 @@ class CollectionInstallment {
       total: _toDouble(json['total']),
       paidAmount: _toDouble(json['paid_amount']),
       status: json['status']?.toString() ?? 'pending',
-      customerName: customer?['full_name']?.toString() ?? 'Cliente',
-      customerPhone: customer?['phone']?.toString(),
-      customerIdentification: customer?['identification']?.toString(),
+      customerName: json['customer_name']?.toString() ?? 'Cliente',
+      customerPhone: json['customer_phone']?.toString(),
+      customerIdentification: json['customer_identification']?.toString(),
     );
   }
 
