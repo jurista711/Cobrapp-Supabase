@@ -1,10 +1,13 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+const _supabasePublishableKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+bool get hasSupabaseConfig =>
+    _supabaseUrl.isNotEmpty && _supabasePublishableKey.isNotEmpty;
 
 Future<void> initSupabase() async {
-  if (_supabaseUrl.isEmpty || _supabaseAnonKey.isEmpty) {
+  if (!hasSupabaseConfig) {
     throw StateError(
       'SUPABASE_URL e SUPABASE_ANON_KEY são obrigatórios via --dart-define.',
     );
@@ -12,7 +15,7 @@ Future<void> initSupabase() async {
 
   await Supabase.initialize(
     url: _supabaseUrl,
-    anonKey: _supabaseAnonKey,
+    publishableKey: _supabasePublishableKey,
   );
 }
 
