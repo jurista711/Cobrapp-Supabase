@@ -1,12 +1,11 @@
-import '../core/supabase_config.dart';
+import '../core/licensed_rpc.dart';
 import '../domain/loan_models.dart';
 
 class CustomersRepository {
   const CustomersRepository();
 
   Future<List<Customer>> listCustomers() async {
-    final rows = await supabaseRequired.rpc('cobrapp_app_list_customers');
-
+    final rows = await licensedRpc('cobrapp_app_list_customers');
     return (rows as List)
         .map<Customer>((row) => _customerFromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
@@ -20,7 +19,7 @@ class CustomersRepository {
     String? address,
     String? notes,
   }) async {
-    final rows = await supabaseRequired.rpc(
+    final rows = await licensedRpc(
       'cobrapp_app_create_customer',
       params: {
         'p_name': fullName,
@@ -30,12 +29,8 @@ class CustomersRepository {
         'p_notes': notes,
       },
     );
-
     final list = rows as List;
-    if (list.isEmpty) {
-      throw StateError('O Supabase não retornou o cliente criado.');
-    }
-
+    if (list.isEmpty) throw StateError('O Supabase não retornou o cliente criado.');
     return _customerFromJson(Map<String, dynamic>.from(list.first as Map));
   }
 
@@ -48,7 +43,7 @@ class CustomersRepository {
     String? address,
     String? notes,
   }) async {
-    final rows = await supabaseRequired.rpc(
+    final rows = await licensedRpc(
       'cobrapp_app_update_customer',
       params: {
         'p_id': id,
@@ -59,25 +54,16 @@ class CustomersRepository {
         'p_notes': notes,
       },
     );
-
     final list = rows as List;
-    if (list.isEmpty) {
-      throw StateError('Cliente não encontrado para atualizar.');
-    }
-
+    if (list.isEmpty) throw StateError('Cliente não encontrado para atualizar.');
     return _customerFromJson(Map<String, dynamic>.from(list.first as Map));
   }
 
   Future<void> deleteCustomer(String id) async {
-    await supabaseRequired.rpc(
-      'cobrapp_app_delete_customer',
-      params: {'p_id': id},
-    );
+    await licensedRpc('cobrapp_app_delete_customer', params: {'p_id': id});
   }
 
-  Future<void> deactivateCustomer(String id) async {
-    await deleteCustomer(id);
-  }
+  Future<void> deactivateCustomer(String id) async => deleteCustomer(id);
 
   Customer _customerFromJson(Map<String, dynamic> json) {
     return Customer(
