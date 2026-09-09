@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/supabase_config.dart';
@@ -101,6 +103,8 @@ class PortfolioPage extends StatelessWidget {
   }
 }
 
+enum CalculatorInterestMode { initialCapital, eachPayment, bankCompound }
+
 class CalculatorPage extends StatefulWidget {
   const CalculatorPage({super.key});
 
@@ -109,73 +113,292 @@ class CalculatorPage extends StatefulWidget {
 }
 
 class _CalculatorPageState extends State<CalculatorPage> {
-  final amount = TextEditingController(text: '3500');
+  final principal = TextEditingController(text: '3500');
   final installments = TextEditingController(text: '5');
   final rate = TextEditingController(text: '30');
-  double? total;
-  double? payment;
-  double? interest;
+
+  CalculatorInterestMode mode = CalculatorInterestMode.initialCapital;
+  _SimulationResult? result;
+  String? error;
 
   @override
   void dispose() {
-    amount.dispose();
+    principal.dispose();
     installments.dispose();
     rate.dispose();
     super.dispose();
   }
 
   void calculate() {
-    final principal = double.tryParse(amount.text.replaceAll(',', '.')) ?? 0;
-    final count = int.tryParse(installments.text) ?? 0;
-    final percent = double.tryParse(rate.text.replaceAll(',', '.')) ?? 0;
-    if (principal <= 0 || count <= 0) {
+    final amount = _parseMoney(principal.text);
+    final count = int.tryParse(installments.text.trim()) ?? 0;
+    final percent = _parseMoney(rate.text);
+
+    if (amount <= 0) {
       setState(() {
-        total = null;
-        payment = null;
-        interest = null;
+        result = null;
+        error = 'Informe o valor do crédito.';
       });
       return;
     }
-    final calcInterest = principal * (percent / 100);
-    final calcTotal = principal + calcInterest;
+
+    if (count <= 0) {
+      setState(() {
+        result = null;
+        error = 'Informe a quantidade de cotas.';
+      });
+      return;
+    }
+
+    if (percent < 0) {
+      setState(() {
+        result = null;
+        error = 'Informe uma taxa válida.';
+      });
+      return;
+    }
+
     setState(() {
-      interest = calcInterest;
-      total = calcTotal;
-      payment = calcTotal / count;
+      error = null;
+      result = _calculate(amount, count, percent, mode);
     });
+  }
+
+  _SimulationResult _calculate(double amount, int count, double percent, CalculatorInterestMode mode) {
+    final rateDecimal = percent / 100;
+    final rows = <_InstallmentRow>[];
+
+    switch (mode) {
+      case CalculatorInterestMode.initialCapital:
+        final totalInterest = amount * rateDecimal;
+        final totalDebt = amount + totalInterest;
+        final payment = totalDebt / count;
+        final principalPart = amount / count;
+        final interestPart = totalInterest / count;
+        for (var i = 1; i <= count; i++) {
+          rows.add(_InstallmentRow(number: i, principal: principalPart, interest: interestPart, total: payment));
+        }
+        return _SimulationResult(
+          modeName: 'Capital inicial',
+          principal: amount,
+          totalInterest: totalInterest,
+          totalDebt: totalDebt,
+          payment: payment,
+          rows: rows,
+        );
+
+      case CalculatorInterestMode.eachPayment:
+        final principalPart = amount / count;
+        final interestPerInstallment = amount * rateDecimal;
+        final payment = principalPart + interestPerInstallment;
+        final totalInterest = interestPerInstallment * count;
+        final totalDebt = amount + totalInterest;
+        for (var i = 1; i <= count; i++) {
+          rows.add(_InstallmentRow(number: i, principal: principalPart, interest: interestPerInstallment, total: payment));
+        }
+        return _SimulationResult(
+          modeName: 'Cada parcela',
+          principal: amount,
+          totalInterest: totalInterest,
+          totalDebt: totalDebt,
+          payment: payment,
+          rows: rows,
+        );
+
+      case CalculatorInterestMode.bankCompound:
+        if (rateDecimal == 0) {
+          final payment = amount / count;
+          for (var i = 1; i <= count; i++) {
+            rows.add(_InstallmentRow(number: i, principal: payment, interest: 0, total: payment));
+          }
+          return _SimulationResult(
+            modeName: 'Juros compostos bancários',
+            principal: amount,
+            totalInterest: 0,
+            totalDebt: amount,
+            payment: payment,
+            rows: rows,
+          );
+        }
+
+        final payment = amount * rateDecimal / (1 - math.pow(1 + rateDecimal, -count));
+        var balance = amount;
+        var totalInterest = 0.0;
+
+        for (var i = 1; i <= count; i++) {
+          final interestPart = balance * rateDecimal;
+          var principalPart = payment - interestPart;
+          var rowTotal = payment;
+
+          if (i == count) {
+            principalPart = balance;
+            rowTotal = principalPart + interestPart;
+          }
+
+          balance -= principalPart;
+          totalInterest += interestPart;
+          rows.add(_InstallmentRow(number: i, principal: principalPart, interest: interestPart, total: rowTotal));
+        }
+
+        return _SimulationResult(
+          modeName: 'Juros compostos bancários',
+          principal: amount,
+          totalInterest: totalInterest,
+          totalDebt: amount + totalInterest,
+          payment: payment,
+          rows: rows,
+        );
+    }
+  }
+
+  double _parseMoney(String value) {
+    final clean = value.replaceAll('R\$', '').replaceAll('.', '').replaceAll(',', '.').trim();
+    return double.tryParse(clean) ?? 0;
   }
 
   String money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
 
   @override
   Widget build(BuildContext context) {
+    final simulation = result;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _Header(title: 'Calculadora', icon: Icons.calculate_outlined),
         const SizedBox(height: 12),
-        TextField(controller: amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Valor do crédito')),
-        const SizedBox(height: 8),
-        TextField(controller: installments, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Cotas')),
-        const SizedBox(height: 8),
-        TextField(controller: rate, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Juros do crédito (%)')),
-        const SizedBox(height: 12),
-        FilledButton.icon(onPressed: calculate, icon: const Icon(Icons.play_arrow), label: const Text('Ver simulação')),
-        const SizedBox(height: 12),
-        if (total != null && payment != null && interest != null)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Valor dos juros: ${money(interest!)}'),
-                Text('Empréstimo + juros: ${money(total!)}'),
-                Text('Valor do pagamento: ${money(payment!)}'),
-              ]),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Tipo de juros', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                SegmentedButton<CalculatorInterestMode>(
+                  segments: const [
+                    ButtonSegment(value: CalculatorInterestMode.initialCapital, label: Text('Capital inicial')),
+                    ButtonSegment(value: CalculatorInterestMode.eachPayment, label: Text('Cada parcela')),
+                    ButtonSegment(value: CalculatorInterestMode.bankCompound, label: Text('Compostos')),
+                  ],
+                  selected: {mode},
+                  onSelectionChanged: (selected) => setState(() {
+                    mode = selected.first;
+                    result = null;
+                    error = null;
+                  }),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: principal,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Valor'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: installments,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Cotas'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: rate,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Juros do crédito (%)'),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: calculate,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Ver simulação'),
+                ),
+              ],
             ),
           ),
+        ),
+        if (error != null) _InfoCard(title: 'Atenção', text: error!),
+        if (simulation != null) ...[
+          _SimulationSummary(result: simulation, money: money),
+          const SizedBox(height: 12),
+          Text('Plano de parcelas', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          for (final row in simulation.rows)
+            Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Parcela ${row.number}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 6),
+                    Text('Capital: ${money(row.principal)}'),
+                    Text('Juros: ${money(row.interest)}'),
+                    Text('Total: ${money(row.total)}'),
+                  ],
+                ),
+              ),
+            ),
+        ],
+        const SizedBox(height: 80),
       ],
     );
   }
+}
+
+class _SimulationSummary extends StatelessWidget {
+  const _SimulationSummary({required this.result, required this.money});
+
+  final _SimulationResult result;
+  final String Function(double value) money;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Resumo da simulação', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text('Interesse: ${result.modeName}'),
+            Text('Valor dos juros: ${money(result.totalInterest)}'),
+            Text('Valor do pagamento: ${money(result.payment)}'),
+            Text('Montante total do empréstimo: ${money(result.principal)}'),
+            Text('Empréstimo + juros: ${money(result.totalDebt)}'),
+            Text('Dívida total: ${money(result.totalDebt)}'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SimulationResult {
+  const _SimulationResult({
+    required this.modeName,
+    required this.principal,
+    required this.totalInterest,
+    required this.totalDebt,
+    required this.payment,
+    required this.rows,
+  });
+
+  final String modeName;
+  final double principal;
+  final double totalInterest;
+  final double totalDebt;
+  final double payment;
+  final List<_InstallmentRow> rows;
+}
+
+class _InstallmentRow {
+  const _InstallmentRow({required this.number, required this.principal, required this.interest, required this.total});
+
+  final int number;
+  final double principal;
+  final double interest;
+  final double total;
 }
 
 class SettingsPage extends StatelessWidget {
