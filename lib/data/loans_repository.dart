@@ -66,7 +66,7 @@ class LoansRepository {
 
     final now = DateTime.now().toIso8601String();
     final installmentPart = amount > installment.remainingAmount ? installment.remainingAmount : amount;
-    final latePart = amount - installmentPart > 0 ? amount - installmentPart : 0;
+    final latePart = amount - installmentPart > 0 ? amount - installmentPart : 0.0;
     final paidAmount = installment.paidAmount + installmentPart;
     final newStatus = paidAmount + 0.009 >= installment.total ? 'paid' : 'pending';
     final cappedPaidAmount = paidAmount > installment.total ? installment.total : paidAmount;
