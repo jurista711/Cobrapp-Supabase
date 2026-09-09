@@ -27,16 +27,17 @@ class CollectionsRepository {
     }
 
     final now = DateTime.now().toIso8601String();
+    final paymentDate = _date(DateTime.now());
+    final remaining = installment.remainingAmount;
 
     await client.from('payments').insert({
       'loan_id': installment.loanId,
       'installment_id': installment.id,
-      'paid_at': now,
-      'total_paid': _money(installment.remainingAmount),
-      'principal_paid': _money(installment.principal),
-      'interest_paid': _money(installment.interest),
-      'late_interest_paid': 0,
-      'extra_capital_paid': 0,
+      'amount': _money(remaining),
+      'principal_amount': _money(installment.principal),
+      'interest_amount': _money(installment.interest),
+      'late_interest_amount': 0,
+      'payment_date': paymentDate,
       'method': 'manual',
       'note': 'Pagamento registrado pela tela Cobranças',
     });
@@ -49,6 +50,13 @@ class CollectionsRepository {
           'updated_at': now,
         })
         .eq('id', installment.id);
+  }
+
+  String _date(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
   }
 
   double _money(double value) => double.parse(value.toStringAsFixed(2));
