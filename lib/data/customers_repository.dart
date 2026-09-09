@@ -5,19 +5,16 @@ class CustomersRepository {
   const CustomersRepository();
 
   static const _fields =
-      'id, full_name, identification, phone, email, address, notes, active';
+      'id, user_id, name, phone, document, address, notes, created_at';
 
   Future<List<Customer>> listCustomers() async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      return const <Customer>[];
-    }
+    final ownerId = currentOwnerUserId;
 
-    final rows = await client
-        .from('customers')
+    final rows = await supabaseRequired
+        .from('cobrapp_customers')
         .select(_fields)
-        .eq('active', true)
-        .order('full_name');
+        .eq('user_id', ownerId)
+        .order('name');
 
     return rows
         .map<Customer>((row) => _customerFromJson(Map<String, dynamic>.from(row)))
@@ -32,18 +29,15 @@ class CustomersRepository {
     String? address,
     String? notes,
   }) async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      throw StateError('Supabase não configurado neste APK.');
-    }
+    final ownerId = currentOwnerUserId;
 
-    final row = await client
-        .from('customers')
+    final row = await supabaseRequired
+        .from('cobrapp_customers')
         .insert({
-          'full_name': fullName,
-          'identification': identification,
+          'user_id': ownerId,
+          'name': fullName,
+          'document': identification,
           'phone': phone,
-          'email': email,
           'address': address,
           'notes': notes,
         })
@@ -62,23 +56,19 @@ class CustomersRepository {
     String? address,
     String? notes,
   }) async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      throw StateError('Supabase não configurado neste APK.');
-    }
+    final ownerId = currentOwnerUserId;
 
-    final row = await client
-        .from('customers')
+    final row = await supabaseRequired
+        .from('cobrapp_customers')
         .update({
-          'full_name': fullName,
-          'identification': identification,
+          'name': fullName,
+          'document': identification,
           'phone': phone,
-          'email': email,
           'address': address,
           'notes': notes,
-          'updated_at': DateTime.now().toIso8601String(),
         })
         .eq('id', id)
+        .eq('user_id', ownerId)
         .select(_fields)
         .single();
 
@@ -86,36 +76,28 @@ class CustomersRepository {
   }
 
   Future<void> deleteCustomer(String id) async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      throw StateError('Supabase não configurado neste APK.');
-    }
-
-    await client.from('customers').delete().eq('id', id);
+    final ownerId = currentOwnerUserId;
+    await supabaseRequired
+        .from('cobrapp_customers')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', ownerId);
   }
 
   Future<void> deactivateCustomer(String id) async {
-    final client = supabaseOrNull;
-    if (client == null) {
-      throw StateError('Supabase não configurado neste APK.');
-    }
-
-    await client
-        .from('customers')
-        .update({'active': false, 'updated_at': DateTime.now().toIso8601String()})
-        .eq('id', id);
+    await deleteCustomer(id);
   }
 
   Customer _customerFromJson(Map<String, dynamic> json) {
     return Customer(
       id: json['id'].toString(),
-      fullName: json['full_name'].toString(),
-      identification: json['identification'].toString(),
+      fullName: (json['name'] ?? '').toString(),
+      identification: (json['document'] ?? '').toString(),
       phone: json['phone'] as String?,
-      email: json['email'] as String?,
+      email: null,
       address: json['address'] as String?,
       notes: json['notes'] as String?,
-      active: json['active'] as bool? ?? true,
+      active: true,
     );
   }
 }
