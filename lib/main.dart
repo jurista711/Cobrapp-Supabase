@@ -33,6 +33,11 @@ class CobrApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const fieldBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(16)),
+      borderSide: BorderSide(color: Color(0xFF4C1D95)),
+    );
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Roots Cobrança',
@@ -51,6 +56,24 @@ class CobrApp extends StatelessWidget {
           color: const Color(0xFF17102F),
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF120A2B),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          border: fieldBorder,
+          enabledBorder: fieldBorder,
+          focusedBorder: fieldBorder.copyWith(
+            borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.8),
+          ),
+          errorBorder: fieldBorder.copyWith(
+            borderSide: const BorderSide(color: Color(0xFFFF5252)),
+          ),
+          focusedErrorBorder: fieldBorder.copyWith(
+            borderSide: const BorderSide(color: Color(0xFFFF5252), width: 1.8),
+          ),
+          hintStyle: const TextStyle(color: Color(0xFF8B7AB8)),
+          labelStyle: const TextStyle(color: Color(0xFFD8CCFF)),
         ),
       ),
       home: HomePage(bootstrapError: bootstrapError),
