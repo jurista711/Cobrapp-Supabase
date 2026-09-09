@@ -41,9 +41,9 @@ class LoansRepository {
 
     final paymentRows = await client
         .from('payments')
-        .select('id, loan_id, installment_id, paid_at, total_paid, principal_paid, interest_paid, late_interest_paid, extra_capital_paid, method, note')
+        .select('id, loan_id, installment_id, payment_date, amount, method, note, created_at')
         .eq('loan_id', loanId)
-        .order('paid_at', ascending: false);
+        .order('payment_date', ascending: false);
 
     return LoanDetail.fromJson(
       Map<String, dynamic>.from(loanRow),
@@ -65,21 +65,21 @@ class LoansRepository {
     }
 
     final now = DateTime.now().toIso8601String();
-    final installmentPart = amount > installment.remainingAmount ? installment.remainingAmount : amount;
-    final latePart = amount - installmentPart > 0 ? amount - installmentPart : 0.0;
-    final paidAmount = installment.paidAmount + installmentPart;
+    final paymentDate = _date(DateTime.now());
+    final double installmentPart = amount > installment.remainingAmount ? installment.remainingAmount : amount;
+    final double latePart = amount - installmentPart > 0 ? amount - installmentPart : 0.0;
+    final double paidAmount = installment.paidAmount + installmentPart;
     final newStatus = paidAmount + 0.009 >= installment.total ? 'paid' : 'pending';
-    final cappedPaidAmount = paidAmount > installment.total ? installment.total : paidAmount;
+    final double cappedPaidAmount = paidAmount > installment.total ? installment.total : paidAmount;
 
     await client.from('payments').insert({
       'loan_id': installment.loanId,
       'installment_id': installment.id,
-      'paid_at': now,
-      'total_paid': _money(amount),
-      'principal_paid': _money(installmentPart),
-      'interest_paid': 0,
-      'late_interest_paid': _money(latePart > lateCharge ? lateCharge : latePart),
-      'extra_capital_paid': 0,
+      'amount': _money(amount),
+      'principal_amount': _money(installmentPart),
+      'interest_amount': 0,
+      'late_interest_amount': _money(latePart > lateCharge ? lateCharge : latePart),
+      'payment_date': paymentDate,
       'method': method,
       'note': note,
     });
@@ -315,7 +315,8 @@ class LoanInstallmentDetail {
     final today = DateTime.now();
     final cleanToday = DateTime(today.year, today.month, today.day);
     final cleanDue = DateTime(dueDate.year, dueDate.month, dueDate.day);
-    return cleanToday.difference(cleanDue).inDays < 0 ? 0 : cleanToday.difference(cleanDue).inDays;
+    final difference = cleanToday.difference(cleanDue).inDays;
+    return difference < 0 ? 0 : difference;
   }
 
   bool get isOverdue => daysLate > 0;
@@ -355,12 +356,13 @@ class LoanPaymentDetail {
   final String? note;
 
   factory LoanPaymentDetail.fromJson(Map<String, dynamic> json) {
+    final paidAtValue = json['payment_date'] ?? json['created_at'];
     return LoanPaymentDetail(
       id: json['id'].toString(),
       loanId: json['loan_id'].toString(),
       installmentId: json['installment_id']?.toString(),
-      paidAt: DateTime.tryParse(json['paid_at'].toString()) ?? DateTime.now(),
-      totalPaid: _toDouble(json['total_paid']),
+      paidAt: DateTime.tryParse(paidAtValue.toString()) ?? DateTime.now(),
+      totalPaid: _toDouble(json['amount']),
       method: json['method']?.toString() ?? 'manual',
       note: json['note']?.toString(),
     );
