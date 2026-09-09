@@ -59,9 +59,7 @@ class _LoansPageState extends State<LoansPage> {
       setState(() {
         customers = loadedCustomers;
         loans = loadedLoans;
-        if (selectedCustomerId == null && loadedCustomers.isNotEmpty) {
-          selectedCustomerId = loadedCustomers.first.id;
-        }
+        selectedCustomerId ??= loadedCustomers.isEmpty ? null : loadedCustomers.first.id;
         loading = false;
       });
     } catch (_) {
@@ -73,28 +71,21 @@ class _LoansPageState extends State<LoansPage> {
     }
   }
 
-  void calculate() {
-    setState(_calculateQuietly);
-  }
+  void calculate() => setState(_calculateQuietly);
 
   void _calculateQuietly() {
     try {
       final calculator = const LoanCalculator();
-      final principal = _readNumber(principalController.text);
-      final rate = _readNumber(rateController.text);
-      final payments = int.parse(paymentsController.text.trim());
-      final customDays = int.parse(customDaysController.text.trim());
-
       error = null;
       result = calculator.calculate(
         LoanCalculationInput(
-          principal: principal,
-          interestRatePercent: rate,
-          paymentsNumber: payments,
+          principal: _readNumber(principalController.text),
+          interestRatePercent: _readNumber(rateController.text),
+          paymentsNumber: int.parse(paymentsController.text.trim()),
           interestType: interestType,
           paymentFrequency: frequency,
           startDate: DateTime.now(),
-          customIntervalDays: customDays,
+          customIntervalDays: int.parse(customDaysController.text.trim()),
         ),
       );
     } catch (_) {
@@ -106,21 +97,9 @@ class _LoansPageState extends State<LoansPage> {
   Future<void> saveLoan() async {
     final current = result;
     final customerId = selectedCustomerId;
-
-    if (!hasSupabaseConfig) {
-      showMessage('Supabase não configurado neste APK.');
-      return;
-    }
-
-    if (customerId == null) {
-      showMessage('Cadastre um cliente antes de salvar o empréstimo.');
-      return;
-    }
-
-    if (current == null) {
-      showMessage('Confira os valores do empréstimo.');
-      return;
-    }
+    if (!hasSupabaseConfig) return showMessage('Supabase não configurado neste APK.');
+    if (customerId == null) return showMessage('Cadastre um cliente antes de salvar o empréstimo.');
+    if (current == null) return showMessage('Confira os valores do empréstimo.');
 
     setState(() => saving = true);
     try {
@@ -138,7 +117,6 @@ class _LoansPageState extends State<LoansPage> {
         result: current,
         note: noteController.text.trim().isEmpty ? null : noteController.text.trim(),
       );
-
       noteController.clear();
       await loadData();
       if (!mounted) return;
@@ -147,22 +125,16 @@ class _LoansPageState extends State<LoansPage> {
       if (!mounted) return;
       showMessage('Erro ao salvar empréstimo. Verifique conexão, tabela e cliente.');
     } finally {
-      if (mounted) {
-        setState(() => saving = false);
-      }
+      if (mounted) setState(() => saving = false);
     }
   }
 
   Future<void> openLoanDetail(LoanListItem loan) async {
-    if (!hasSupabaseConfig) {
-      showMessage('Supabase não configurado neste APK.');
-      return;
-    }
-
-    showModalBottomSheet<void>(
+    if (!hasSupabaseConfig) return showMessage('Supabase não configurado neste APK.');
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) => LoanDetailSheet(
+      builder: (_) => LoanDetailSheet(
         loanId: loan.id,
         repository: loansRepository,
         money: _money,
@@ -176,14 +148,9 @@ class _LoansPageState extends State<LoansPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  double _readNumber(String text) {
-    final normalized = text.trim().replaceAll('.', '').replaceAll(',', '.');
-    return double.parse(normalized);
-  }
+  double _readNumber(String text) => double.parse(text.trim().replaceAll('.', '').replaceAll(',', '.'));
 
-  String _money(double value) {
-    return 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
-  }
+  String _money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
 
   String _date(DateTime value) {
     final day = value.day.toString().padLeft(2, '0');
@@ -202,82 +169,30 @@ class _LoansPageState extends State<LoansPage> {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  'Empréstimos',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-              ),
-              IconButton(
-                onPressed: loading ? null : loadData,
-                icon: loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh),
-              ),
+              Expanded(child: Text('Empréstimos', style: Theme.of(context).textTheme.headlineSmall)),
+              IconButton(onPressed: loading ? null : loadData, icon: loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.refresh)),
             ],
           ),
           const SizedBox(height: 8),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                hasSupabaseConfig
-                    ? 'Online no Supabase. Selecione um cliente e salve o empréstimo.'
-                    : 'Supabase não configurado neste APK.',
-              ),
-            ),
-          ),
+          Card(child: Padding(padding: const EdgeInsets.all(12), child: Text(hasSupabaseConfig ? 'Online no Supabase. Toque em um empréstimo para detalhes e baixa.' : 'Supabase não configurado neste APK.'))),
           const SizedBox(height: 12),
           Text('Novo empréstimo', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
           if (customers.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(12),
-                child: Text('Nenhum cliente carregado. Cadastre primeiro na tela Clientes e toque em atualizar.'),
-              ),
-            )
+            const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Nenhum cliente carregado. Cadastre primeiro na tela Clientes e toque em atualizar.')))
           else
             DropdownButtonFormField<String>(
-              initialValue: customers.any((customer) => customer.id == selectedCustomerId)
-                  ? selectedCustomerId
-                  : customers.first.id,
+              initialValue: customers.any((customer) => customer.id == selectedCustomerId) ? selectedCustomerId : customers.first.id,
               decoration: const InputDecoration(labelText: 'Cliente'),
-              items: customers
-                  .map(
-                    (customer) => DropdownMenuItem(
-                      value: customer.id,
-                      child: Text(customer.fullName),
-                    ),
-                  )
-                  .toList(),
+              items: customers.map((customer) => DropdownMenuItem(value: customer.id, child: Text(customer.fullName))).toList(),
               onChanged: (value) => setState(() => selectedCustomerId = value),
             ),
           const SizedBox(height: 8),
-          TextField(
-            controller: principalController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Montante do empréstimo'),
-            onChanged: (_) => calculate(),
-          ),
+          TextField(controller: principalController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Montante do empréstimo'), onChanged: (_) => calculate()),
           const SizedBox(height: 8),
-          TextField(
-            controller: rateController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Juros (%)'),
-            onChanged: (_) => calculate(),
-          ),
+          TextField(controller: rateController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Juros (%)'), onChanged: (_) => calculate()),
           const SizedBox(height: 8),
-          TextField(
-            controller: paymentsController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Cotas'),
-            onChanged: (_) => calculate(),
-          ),
+          TextField(controller: paymentsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Cotas'), onChanged: (_) => calculate()),
           const SizedBox(height: 12),
           DropdownButtonFormField<InterestType>(
             initialValue: interestType,
@@ -316,26 +231,12 @@ class _LoansPageState extends State<LoansPage> {
           ),
           if (frequency == PaymentFrequency.custom) ...[
             const SizedBox(height: 8),
-            TextField(
-              controller: customDaysController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Intervalo manual em dias'),
-              onChanged: (_) => calculate(),
-            ),
+            TextField(controller: customDaysController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Intervalo manual em dias'), onChanged: (_) => calculate()),
           ],
           const SizedBox(height: 8),
-          TextField(
-            controller: noteController,
-            decoration: const InputDecoration(labelText: 'Observação'),
-          ),
+          TextField(controller: noteController, decoration: const InputDecoration(labelText: 'Observação')),
           const SizedBox(height: 16),
-          if (error != null)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(error!),
-              ),
-            ),
+          if (error != null) Card(child: Padding(padding: const EdgeInsets.all(12), child: Text(error!))),
           if (current != null)
             Card(
               child: Padding(
@@ -359,21 +260,14 @@ class _LoansPageState extends State<LoansPage> {
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: saving ? null : saveLoan,
-            icon: saving
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.save_outlined),
+            icon: saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.save_outlined),
             label: Text(saving ? 'Salvando...' : 'Salvar empréstimo'),
           ),
           const SizedBox(height: 24),
           Text('Empréstimos cadastrados', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           if (loans.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(12),
-                child: Text('Nenhum empréstimo cadastrado ainda.'),
-              ),
-            )
+            const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Nenhum empréstimo cadastrado ainda.')))
           else
             for (final loan in loans)
               Card(
@@ -384,10 +278,7 @@ class _LoansPageState extends State<LoansPage> {
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(_money(loan.totalDebt), style: const TextStyle(fontWeight: FontWeight.w700)),
-                      Text(loan.status),
-                    ],
+                    children: [Text(_money(loan.totalDebt), style: const TextStyle(fontWeight: FontWeight.w700)), Text(loan.status)],
                   ),
                 ),
               ),
@@ -444,16 +335,15 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
       loading = true;
       error = null;
     });
-
     try {
       final loaded = await widget.repository.getLoanDetail(widget.loanId);
       if (!mounted) return;
-      final nextInstallment = loaded.installments.where((item) => !item.isPaid).cast<LoanInstallmentDetail?>().firstOrNull;
+      final nextInstallment = loaded.installments.where((item) => !item.isPaid).firstOrNull;
       setState(() {
         detail = loaded;
         selectedInstallmentId = nextInstallment?.id;
         if (nextInstallment != null && paymentController.text.trim().isEmpty) {
-          paymentController.text = nextInstallment.remainingAmount.toStringAsFixed(2).replaceAll('.', ',');
+          paymentController.text = loaded.updatedRemainingFor(nextInstallment).toStringAsFixed(2).replaceAll('.', ',');
         }
         loading = false;
       });
@@ -469,25 +359,20 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
   Future<void> registerPayment() async {
     final current = detail;
     if (current == null || selectedInstallmentId == null) return;
-
     final installment = current.installments.firstWhere((item) => item.id == selectedInstallmentId);
     final amount = _readNumber(paymentController.text);
+    final lateCharge = current.lateChargeFor(installment);
+    final maxPayable = current.updatedRemainingFor(installment);
 
-    if (amount <= 0) {
-      showMessage('Informe um valor maior que zero.');
-      return;
-    }
-
-    if (amount > installment.remainingAmount + 0.009) {
-      showMessage('O valor não pode passar do restante da parcela.');
-      return;
-    }
+    if (amount <= 0) return showMessage('Informe um valor maior que zero.');
+    if (amount > maxPayable + 0.009) return showMessage('O valor não pode passar do total atualizado da parcela.');
 
     setState(() => paying = true);
     try {
       await widget.repository.registerPartialPayment(
         installment: installment,
         amount: amount,
+        lateCharge: lateCharge,
         note: paymentNoteController.text.trim().isEmpty ? null : paymentNoteController.text.trim(),
       );
       paymentController.clear();
@@ -508,24 +393,18 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  double _readNumber(String text) {
-    final normalized = text.trim().replaceAll('.', '').replaceAll(',', '.');
-    return double.tryParse(normalized) ?? 0;
-  }
+  double _readNumber(String text) => double.tryParse(text.trim().replaceAll('.', '').replaceAll(',', '.')) ?? 0;
 
   @override
   Widget build(BuildContext context) {
     final current = detail;
-    final selectedInstallment = current?.installments.where((item) => item.id == selectedInstallmentId).cast<LoanInstallmentDetail?>().firstOrNull;
+    final selectedInstallment = current?.installments.where((item) => item.id == selectedInstallmentId).firstOrNull;
+    final selectedLateCharge = current == null || selectedInstallment == null ? 0.0 : current.lateChargeFor(selectedInstallment);
+    final selectedUpdatedTotal = current == null || selectedInstallment == null ? 0.0 : current.updatedRemainingFor(selectedInstallment);
 
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 12,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        ),
+        padding: EdgeInsets.only(left: 16, right: 16, top: 12, bottom: MediaQuery.of(context).viewInsets.bottom + 16),
         child: loading
             ? const SizedBox(height: 220, child: Center(child: CircularProgressIndicator()))
             : error != null
@@ -535,14 +414,7 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
                     : ListView(
                         shrinkWrap: true,
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text('Detalhe do empréstimo', style: Theme.of(context).textTheme.titleLarge),
-                              ),
-                              IconButton(onPressed: loadDetail, icon: const Icon(Icons.refresh)),
-                            ],
-                          ),
+                          Row(children: [Expanded(child: Text('Detalhe do empréstimo', style: Theme.of(context).textTheme.titleLarge)), IconButton(onPressed: loadDetail, icon: const Icon(Icons.refresh))]),
                           Text(current.customerName, style: Theme.of(context).textTheme.titleMedium),
                           if (current.customerPhone != null) Text('Telefone: ${current.customerPhone}'),
                           if (current.customerIdentification != null) Text('Documento: ${current.customerIdentification}'),
@@ -554,9 +426,12 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
                                 children: [
                                   _Line(label: 'Capital', value: widget.money(current.amount)),
                                   _Line(label: 'Juros', value: widget.money(current.totalInterest)),
-                                  _Line(label: 'Total', value: widget.money(current.totalDebt)),
-                                  _Line(label: 'Pago', value: widget.money(current.totalPaid)),
-                                  _Line(label: 'Restante', value: widget.money(current.remaining)),
+                                  _Line(label: 'Total original', value: widget.money(current.totalDebt)),
+                                  _Line(label: 'Pago em parcelas', value: widget.money(current.totalPaid)),
+                                  _Line(label: 'Restante original', value: widget.money(current.remaining)),
+                                  _Line(label: 'Juros atraso/dia', value: '${current.lateInterestRate.toStringAsFixed(2).replaceAll('.', ',')}%'),
+                                  _Line(label: 'Multa atraso', value: widget.money(current.lateFee)),
+                                  _Line(label: 'Carência', value: '${current.daysOfGrace} dia(s)'),
                                   _Line(label: 'Parcelas pagas', value: '${current.paidCount}/${current.installments.length}'),
                                   _Line(label: 'Vencidas', value: '${current.overdueCount}'),
                                   _Line(label: 'Status', value: current.status),
@@ -568,57 +443,46 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
                           Text('Registrar pagamento', style: Theme.of(context).textTheme.titleMedium),
                           const SizedBox(height: 8),
                           if (current.pendingCount == 0)
-                            const Card(
-                              child: Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Text('Todas as parcelas estão pagas.'),
-                              ),
-                            )
+                            const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Todas as parcelas estão pagas.')))
                           else ...[
                             DropdownButtonFormField<String>(
                               initialValue: selectedInstallmentId,
                               decoration: const InputDecoration(labelText: 'Parcela'),
-                              items: current.installments
-                                  .where((item) => !item.isPaid)
-                                  .map(
-                                    (item) => DropdownMenuItem(
-                                      value: item.id,
-                                      child: Text('Parcela ${item.number} • ${widget.money(item.remainingAmount)}'),
-                                    ),
-                                  )
-                                  .toList(),
+                              items: current.installments.where((item) => !item.isPaid).map((item) {
+                                final late = current.lateChargeFor(item);
+                                final label = late > 0 ? 'Parcela ${item.number} • ${widget.money(item.remainingAmount + late)} com atraso' : 'Parcela ${item.number} • ${widget.money(item.remainingAmount)}';
+                                return DropdownMenuItem(value: item.id, child: Text(label));
+                              }).toList(),
                               onChanged: (value) {
-                                final next = current.installments.where((item) => item.id == value).cast<LoanInstallmentDetail?>().firstOrNull;
+                                final next = current.installments.where((item) => item.id == value).firstOrNull;
                                 setState(() {
                                   selectedInstallmentId = value;
-                                  if (next != null) {
-                                    paymentController.text = next.remainingAmount.toStringAsFixed(2).replaceAll('.', ',');
-                                  }
+                                  if (next != null) paymentController.text = current.updatedRemainingFor(next).toStringAsFixed(2).replaceAll('.', ',');
                                 });
                               },
                             ),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: paymentController,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                labelText: 'Valor pago',
-                                helperText: selectedInstallment == null ? null : 'Restante da parcela: ${widget.money(selectedInstallment.remainingAmount)}',
+                            if (selectedInstallment != null) ...[
+                              const SizedBox(height: 8),
+                              Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    children: [
+                                      _Line(label: 'Restante da parcela', value: widget.money(selectedInstallment.remainingAmount)),
+                                      _Line(label: 'Dias de atraso', value: '${selectedInstallment.daysLate}'),
+                                      _Line(label: 'Acréscimo por atraso', value: widget.money(selectedLateCharge)),
+                                      _Line(label: 'Total atualizado', value: widget.money(selectedUpdatedTotal)),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
+                            ],
                             const SizedBox(height: 8),
-                            TextField(
-                              controller: paymentNoteController,
-                              decoration: const InputDecoration(labelText: 'Observação do pagamento'),
-                            ),
+                            TextField(controller: paymentController, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Valor pago', helperText: selectedInstallment == null ? null : 'Pode ser parcial ou total atualizado: ${widget.money(selectedUpdatedTotal)}')),
                             const SizedBox(height: 8),
-                            FilledButton.icon(
-                              onPressed: paying ? null : registerPayment,
-                              icon: paying
-                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                                  : const Icon(Icons.payments_outlined),
-                              label: Text(paying ? 'Registrando...' : 'Registrar pagamento'),
-                            ),
+                            TextField(controller: paymentNoteController, decoration: const InputDecoration(labelText: 'Observação do pagamento')),
+                            const SizedBox(height: 8),
+                            FilledButton.icon(onPressed: paying ? null : registerPayment, icon: paying ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.payments_outlined), label: Text(paying ? 'Registrando...' : 'Registrar pagamento')),
                           ],
                           const SizedBox(height: 16),
                           Text('Parcelas', style: Theme.of(context).textTheme.titleMedium),
@@ -632,8 +496,8 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    Text(widget.money(installment.total), style: const TextStyle(fontWeight: FontWeight.w700)),
-                                    Text(installment.isPaid ? 'paga' : installment.isOverdue ? 'vencida' : 'pendente'),
+                                    Text(widget.money(current.updatedRemainingFor(installment)), style: const TextStyle(fontWeight: FontWeight.w700)),
+                                    Text(installment.isPaid ? 'paga' : installment.isOverdue ? '${installment.daysLate} dia(s)' : 'pendente'),
                                   ],
                                 ),
                               ),
@@ -642,21 +506,10 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
                           Text('Histórico de pagamentos', style: Theme.of(context).textTheme.titleMedium),
                           const SizedBox(height: 8),
                           if (current.payments.isEmpty)
-                            const Card(
-                              child: Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Text('Nenhum pagamento registrado.'),
-                              ),
-                            )
+                            const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Nenhum pagamento registrado.')))
                           else
                             for (final payment in current.payments)
-                              Card(
-                                child: ListTile(
-                                  leading: const Icon(Icons.receipt_long_outlined),
-                                  title: Text(widget.money(payment.totalPaid)),
-                                  subtitle: Text('${widget.date(payment.paidAt)} • ${payment.method}${payment.note == null ? '' : ' • ${payment.note}'}'),
-                                ),
-                              ),
+                              Card(child: ListTile(leading: const Icon(Icons.receipt_long_outlined), title: Text(widget.money(payment.totalPaid)), subtitle: Text('${widget.date(payment.paidAt)} • ${payment.method}${payment.note == null ? '' : ' • ${payment.note}'}'))),
                         ],
                       ),
       ),
@@ -676,10 +529,7 @@ class _Line extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
-        ],
+        children: [Text(label), Text(value, style: const TextStyle(fontWeight: FontWeight.w700))],
       ),
     );
   }
