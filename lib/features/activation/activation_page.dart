@@ -104,7 +104,7 @@ class _ActivationPageState extends State<ActivationPage> {
     super.dispose();
   }
 
-  Future<void> activate() async {
+  Future<void> activateDevice() async {
     final code = codeController.text.trim();
     if (code.isEmpty) {
       setState(() => message = 'Digite o código de ativação.');
@@ -172,11 +172,11 @@ class _ActivationPageState extends State<ActivationPage> {
                           hintText: 'Ex: COBRAPP-TESTE-001',
                           prefixIcon: Icon(Icons.key_outlined),
                         ),
-                        onSubmitted: (_) => loading ? null : activate(),
+                        onSubmitted: (_) => loading ? null : activateDevice(),
                       ),
                       const SizedBox(height: 12),
                       FilledButton.icon(
-                        onPressed: loading ? null : activate,
+                        onPressed: loading ? null : activateDevice,
                         icon: loading
                             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                             : const Icon(Icons.lock_open_outlined),
