@@ -1,10 +1,10 @@
-import '../core/supabase_config.dart';
+import '../core/licensed_rpc.dart';
 
 class DashboardRepository {
   const DashboardRepository();
 
   Future<DashboardSummary> loadSummary() async {
-    final response = await supabaseRequired.rpc('cobrapp_app_dashboard_summary');
+    final response = await licensedRpc('cobrapp_app_dashboard_summary');
     final json = Map<String, dynamic>.from(response as Map);
     return DashboardSummary(
       customersCount: _toInt(json['customers_count']),
