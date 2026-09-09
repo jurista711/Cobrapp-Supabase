@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'core/supabase_config.dart';
+import 'features/cash/cash_page.dart';
 import 'features/collections/collections_page.dart';
 import 'features/customers/customers_page.dart';
 import 'features/dashboard/dashboard_page.dart';
@@ -33,13 +34,22 @@ class CobrApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'CobrApp Supabase',
+      title: 'Roots Cobrança',
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF7C3AED),
-          brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0A0618),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF8B5CF6),
+          secondary: Color(0xFFEC4899),
+          tertiary: Color(0xFFEF4444),
+          surface: Color(0xFF120A2B),
+          onSurface: Color(0xFFF8F5FF),
+        ),
+        cardTheme: CardThemeData(
+          color: const Color(0xFF17102F),
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         ),
       ),
       home: HomePage(bootstrapError: bootstrapError),
@@ -58,66 +68,153 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int index = 0;
+  Widget? drawerPage;
+  String drawerTitle = 'Roots Cobrança';
 
   late final pages = <Widget>[
     const DashboardPage(),
     const CustomersPage(),
     const LoansPage(),
     const CollectionsPage(),
-    const DocumentsPage(),
+    const CashPage(),
   ];
+
+  final bottomTitles = const <String>[
+    'Início',
+    'Clientes',
+    'Empréstimos',
+    'Cobranças',
+    'Caixa',
+  ];
+
+  void openDrawerPage(String title, Widget page) {
+    Navigator.of(context).pop();
+    setState(() {
+      drawerTitle = title;
+      drawerPage = page;
+    });
+  }
+
+  void openMainPage(int value) {
+    setState(() {
+      index = value;
+      drawerPage = null;
+      drawerTitle = 'Roots Cobrança';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final activeTitle = drawerPage == null ? bottomTitles[index] : drawerTitle;
     return Scaffold(
-      appBar: AppBar(title: const Text('CobrApp Supabase')),
+      appBar: AppBar(title: Text(activeTitle == 'Início' ? 'Roots Cobrança' : activeTitle)),
+      drawer: Drawer(
+        child: SafeArea(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              const DrawerHeader(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Icon(Icons.account_balance_wallet_rounded, size: 42),
+                    SizedBox(height: 10),
+                    Text('Roots Cobrança', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+                    Text('Gestão de empréstimos e cobranças'),
+                  ],
+                ),
+              ),
+              _DrawerItem(icon: Icons.dashboard_outlined, title: 'Início', onTap: () => openMainPage(0)),
+              _DrawerItem(icon: Icons.people_outline, title: 'Clientes', onTap: () => openMainPage(1)),
+              _DrawerItem(icon: Icons.account_balance_wallet_outlined, title: 'Empréstimos', onTap: () => openMainPage(2)),
+              _DrawerItem(icon: Icons.event_available_outlined, title: 'Cobranças', onTap: () => openMainPage(3)),
+              _DrawerItem(icon: Icons.point_of_sale_outlined, title: 'Caixa', onTap: () => openMainPage(4)),
+              const Divider(),
+              _DrawerItem(icon: Icons.payments_outlined, title: 'Pagamentos', onTap: () => openDrawerPage('Pagamentos', const FeatureShellPage(title: 'Pagamentos', description: 'Histórico e controle de pagamentos registrados.'))),
+              _DrawerItem(icon: Icons.receipt_long_outlined, title: 'Recibos', onTap: () => openDrawerPage('Recibos', const FeatureShellPage(title: 'Recibos', description: 'Recibos numerados, PDF, assinatura e envio.'))),
+              _DrawerItem(icon: Icons.route_outlined, title: 'Rotas', onTap: () => openDrawerPage('Rotas', const FeatureShellPage(title: 'Rotas', description: 'Organização de rotas de cobrança e clientes por rota.'))),
+              _DrawerItem(icon: Icons.bar_chart_outlined, title: 'Relatórios', onTap: () => openDrawerPage('Relatórios', const FeatureShellPage(title: 'Relatórios', description: 'Filtros, períodos, totais e exportação.'))),
+              _DrawerItem(icon: Icons.pie_chart_outline, title: 'Gestão da Carteira', onTap: () => openDrawerPage('Gestão da Carteira', const FeatureShellPage(title: 'Gestão da Carteira', description: 'Visão consolidada da carteira, saldo aberto e inadimplência.'))),
+              _DrawerItem(icon: Icons.calculate_outlined, title: 'Calculadora', onTap: () => openDrawerPage('Calculadora', const FeatureShellPage(title: 'Calculadora', description: 'Simulação de crédito com tipos de juros e frequências.'))),
+              _DrawerItem(icon: Icons.settings_outlined, title: 'Configurações', onTap: () => openDrawerPage('Configurações', const FeatureShellPage(title: 'Configurações', description: 'Preferências, dados do negócio, moeda, logo e assinatura.'))),
+              _DrawerItem(icon: Icons.description_outlined, title: 'Documentos', onTap: () => openDrawerPage('Documentos', const DocumentsPage())),
+            ],
+          ),
+        ),
+      ),
       body: Column(
         children: [
           if (widget.bootstrapError != null)
             MaterialBanner(
-              content: const Text(
-                'Supabase ainda não foi configurado neste APK. A interface continua disponível para validação.',
-              ),
+              content: const Text('Supabase ainda não foi configurado neste APK. A interface continua disponível para validação.'),
               actions: [
                 TextButton(
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(widget.bootstrapError!)),
-                    );
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(widget.bootstrapError!)));
                   },
                   child: const Text('DETALHES'),
                 ),
               ],
             ),
-          Expanded(child: pages[index]),
+          Expanded(child: drawerPage ?? pages[index]),
         ],
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (value) => setState(() => index = value),
+        selectedIndex: drawerPage == null ? index : 0,
+        onDestinationSelected: openMainPage,
         destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            label: 'Início',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            label: 'Clientes',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            label: 'Empréstimos',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.event_available_outlined),
-            label: 'Cobranças',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.description_outlined),
-            label: 'Documentos',
-          ),
+          NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Início'),
+          NavigationDestination(icon: Icon(Icons.people_outline), label: 'Clientes'),
+          NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: 'Empréstimos'),
+          NavigationDestination(icon: Icon(Icons.event_available_outlined), label: 'Cobranças'),
+          NavigationDestination(icon: Icon(Icons.point_of_sale_outlined), label: 'Caixa'),
         ],
       ),
+    );
+  }
+}
+
+class _DrawerItem extends StatelessWidget {
+  const _DrawerItem({required this.icon, required this.title, required this.onTap});
+
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(leading: Icon(icon), title: Text(title), onTap: onTap);
+  }
+}
+
+class FeatureShellPage extends StatelessWidget {
+  const FeatureShellPage({super.key, required this.title, required this.description});
+
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(title, style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(description),
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('Tela criada no menu correto do original. Próxima etapa: conectar regra e banco específicos desta função.'),
+          ),
+        ),
+      ],
     );
   }
 }
