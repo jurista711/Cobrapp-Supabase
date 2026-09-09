@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/supabase_config.dart';
 import '../../data/customers_repository.dart';
@@ -22,8 +21,6 @@ class _LoansPageState extends State<LoansPage> {
   final paymentsController = TextEditingController(text: '5');
   final customDaysController = TextEditingController(text: '30');
   final noteController = TextEditingController();
-  final money = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
-  final date = DateFormat('dd/MM/yyyy', 'pt_BR');
 
   List<Customer> customers = const <Customer>[];
   List<LoanListItem> loans = const <LoanListItem>[];
@@ -32,14 +29,14 @@ class _LoansPageState extends State<LoansPage> {
   PaymentFrequency frequency = PaymentFrequency.biweekly;
   LoanCalculationResult? result;
   String? error;
-  bool loading = true;
+  bool loading = false;
   bool saving = false;
 
   @override
   void initState() {
     super.initState();
-    calculate();
-    loadData();
+    _calculateQuietly();
+    WidgetsBinding.instance.addPostFrameCallback((_) => loadData());
   }
 
   @override
@@ -53,6 +50,7 @@ class _LoansPageState extends State<LoansPage> {
   }
 
   Future<void> loadData() async {
+    if (!mounted) return;
     setState(() => loading = true);
     try {
       final loadedCustomers = await customersRepository.listCustomers();
@@ -61,19 +59,25 @@ class _LoansPageState extends State<LoansPage> {
       setState(() {
         customers = loadedCustomers;
         loans = loadedLoans;
-        selectedCustomerId ??= loadedCustomers.isEmpty ? null : loadedCustomers.first.id;
+        if (selectedCustomerId == null && loadedCustomers.isNotEmpty) {
+          selectedCustomerId = loadedCustomers.first.id;
+        }
         loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         loading = false;
-        error = 'Não foi possível carregar empréstimos.';
+        error = 'Não foi possível carregar dados do Supabase.';
       });
     }
   }
 
   void calculate() {
+    setState(_calculateQuietly);
+  }
+
+  void _calculateQuietly() {
     try {
       final calculator = const LoanCalculator();
       final principal = _readNumber(principalController.text);
@@ -81,25 +85,21 @@ class _LoansPageState extends State<LoansPage> {
       final payments = int.parse(paymentsController.text.trim());
       final customDays = int.parse(customDaysController.text.trim());
 
-      setState(() {
-        error = null;
-        result = calculator.calculate(
-          LoanCalculationInput(
-            principal: principal,
-            interestRatePercent: rate,
-            paymentsNumber: payments,
-            interestType: interestType,
-            paymentFrequency: frequency,
-            startDate: DateTime.now(),
-            customIntervalDays: customDays,
-          ),
-        );
-      });
+      error = null;
+      result = calculator.calculate(
+        LoanCalculationInput(
+          principal: principal,
+          interestRatePercent: rate,
+          paymentsNumber: payments,
+          interestType: interestType,
+          paymentFrequency: frequency,
+          startDate: DateTime.now(),
+          customIntervalDays: customDays,
+        ),
+      );
     } catch (_) {
-      setState(() {
-        result = null;
-        error = 'Confira os valores informados.';
-      });
+      result = null;
+      error = 'Confira os valores informados.';
     }
   }
 
@@ -143,7 +143,7 @@ class _LoansPageState extends State<LoansPage> {
       await loadData();
       showMessage('Empréstimo salvo no Supabase.');
     } catch (_) {
-      showMessage('Erro ao salvar empréstimo. Verifique conexão e cliente.');
+      showMessage('Erro ao salvar empréstimo. Verifique conexão, tabela e cliente.');
     } finally {
       if (mounted) {
         setState(() => saving = false);
@@ -160,48 +160,71 @@ class _LoansPageState extends State<LoansPage> {
     return double.parse(normalized);
   }
 
+  String _money(double value) {
+    return 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
+  }
+
+  String _date(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    return '$day/$month/${value.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final current = result;
     return RefreshIndicator(
       onRefresh: loadData,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           Row(
             children: [
               Expanded(
                 child: Text(
-                  'Novo empréstimo',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  'Empréstimos',
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
               ),
-              if (loading)
-                const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+              IconButton(
+                onPressed: loading ? null : loadData,
+                icon: loading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
-          if (!hasSupabaseConfig)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(12),
-                child: Text('Supabase não configurado. O empréstimo só salva online quando o APK tiver as chaves.'),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                hasSupabaseConfig
+                    ? 'Online no Supabase. Selecione um cliente e salve o empréstimo.'
+                    : 'Supabase não configurado neste APK.',
               ),
             ),
+          ),
+          const SizedBox(height: 12),
+          Text('Novo empréstimo', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
           if (customers.isEmpty)
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(12),
-                child: Text('Nenhum cliente carregado. Cadastre um cliente na tela Clientes.'),
+                child: Text('Nenhum cliente carregado. Cadastre primeiro na tela Clientes e toque em atualizar.'),
               ),
             )
           else
             DropdownButtonFormField<String>(
-              initialValue: selectedCustomerId,
+              value: customers.any((customer) => customer.id == selectedCustomerId)
+                  ? selectedCustomerId
+                  : customers.first.id,
               decoration: const InputDecoration(labelText: 'Cliente'),
               items: customers
                   .map(
@@ -224,7 +247,7 @@ class _LoansPageState extends State<LoansPage> {
           TextField(
             controller: rateController,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Interesse (%)'),
+            decoration: const InputDecoration(labelText: 'Juros (%)'),
             onChanged: (_) => calculate(),
           ),
           const SizedBox(height: 8),
@@ -236,7 +259,7 @@ class _LoansPageState extends State<LoansPage> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<InterestType>(
-            initialValue: interestType,
+            value: interestType,
             decoration: const InputDecoration(labelText: 'Tipo de juros'),
             items: const [
               DropdownMenuItem(value: InterestType.initialCapital, child: Text('Capital inicial')),
@@ -245,13 +268,15 @@ class _LoansPageState extends State<LoansPage> {
             ],
             onChanged: (value) {
               if (value == null) return;
-              setState(() => interestType = value);
-              calculate();
+              setState(() {
+                interestType = value;
+                _calculateQuietly();
+              });
             },
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<PaymentFrequency>(
-            initialValue: frequency,
+            value: frequency,
             decoration: const InputDecoration(labelText: 'Frequência de pagamento'),
             items: const [
               DropdownMenuItem(value: PaymentFrequency.daily, child: Text('Diário')),
@@ -262,8 +287,10 @@ class _LoansPageState extends State<LoansPage> {
             ],
             onChanged: (value) {
               if (value == null) return;
-              setState(() => frequency = value);
-              calculate();
+              setState(() {
+                frequency = value;
+                _calculateQuietly();
+              });
             },
           ),
           if (frequency == PaymentFrequency.custom) ...[
@@ -288,7 +315,26 @@ class _LoansPageState extends State<LoansPage> {
                 child: Text(error!),
               ),
             ),
-          if (current != null) _LoanSummary(money: money, date: date, result: current),
+          if (current != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Resumo', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    _Line(label: 'Montante', value: _money(current.principal)),
+                    _Line(label: 'Juros', value: _money(current.totalInterest)),
+                    _Line(label: 'Total', value: _money(current.totalDebt)),
+                    _Line(label: 'Pagamento', value: _money(current.paymentAmount)),
+                    _Line(label: 'Final', value: _date(current.endDate)),
+                    const Divider(),
+                    Text('Parcelas geradas: ${current.installments.length}'),
+                  ],
+                ),
+              ),
+            ),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: saving ? null : saveLoan,
@@ -312,49 +358,18 @@ class _LoansPageState extends State<LoansPage> {
               Card(
                 child: ListTile(
                   title: Text(loan.customerName),
-                  subtitle: Text('${loan.paymentsNumber} cotas • vence ${date.format(loan.endDate)}'),
+                  subtitle: Text('${loan.paymentsNumber} cotas • vence ${_date(loan.endDate)}'),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(money.format(loan.totalDebt), style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Text(_money(loan.totalDebt), style: const TextStyle(fontWeight: FontWeight.w700)),
                       Text(loan.status),
                     ],
                   ),
                 ),
               ),
         ],
-      ),
-    );
-  }
-}
-
-class _LoanSummary extends StatelessWidget {
-  const _LoanSummary({required this.money, required this.date, required this.result});
-
-  final NumberFormat money;
-  final DateFormat date;
-  final LoanCalculationResult result;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Resumo', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            _Line(label: 'Montante', value: money.format(result.principal)),
-            _Line(label: 'Juros', value: money.format(result.totalInterest)),
-            _Line(label: 'Total', value: money.format(result.totalDebt)),
-            _Line(label: 'Pagamento', value: money.format(result.paymentAmount)),
-            _Line(label: 'Final', value: date.format(result.endDate)),
-            const Divider(),
-            Text('Parcelas: ${result.installments.length}'),
-          ],
-        ),
       ),
     );
   }
