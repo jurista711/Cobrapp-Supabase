@@ -1,4 +1,4 @@
-import '../core/supabase_config.dart';
+import '../core/licensed_rpc.dart';
 import '../domain/loan_models.dart';
 import '../services/loan_calculator.dart';
 
@@ -6,14 +6,14 @@ class LoansRepository {
   const LoansRepository();
 
   Future<List<LoanListItem>> listActiveLoans() async {
-    final rows = await supabaseRequired.rpc('cobrapp_app_list_loans');
+    final rows = await licensedRpc('cobrapp_app_list_loans');
     return (rows as List)
         .map<LoanListItem>((row) => LoanListItem.fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
   }
 
   Future<LoanDetail> getLoanDetail(String loanId) async {
-    final response = await supabaseRequired.rpc(
+    final response = await licensedRpc(
       'cobrapp_app_get_loan_detail',
       params: {'p_loan_id': loanId},
     );
@@ -37,7 +37,7 @@ class LoansRepository {
     String method = 'manual',
     String? note,
   }) async {
-    await supabaseRequired.rpc(
+    await licensedRpc(
       'cobrapp_app_register_payment',
       params: {
         'p_installment_id': installment.id,
@@ -67,7 +67,7 @@ class LoansRepository {
         )
         .toList();
 
-    final loanId = await supabaseRequired.rpc(
+    final loanId = await licensedRpc(
       'cobrapp_app_create_loan',
       params: {
         'p_customer_id': customerId,
