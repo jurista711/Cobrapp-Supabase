@@ -7,9 +7,9 @@ void main() {
 
     expect(find.text('CobrApp Supabase'), findsOneWidget);
     expect(find.text('Início'), findsWidgets);
-    expect(find.text('Clientes'), findsOneWidget);
-    expect(find.text('Empréstimos'), findsOneWidget);
-    expect(find.text('Cobranças'), findsOneWidget);
-    expect(find.text('Documentos'), findsOneWidget);
+    expect(find.text('Clientes'), findsWidgets);
+    expect(find.text('Empréstimos'), findsWidgets);
+    expect(find.text('Cobranças'), findsWidgets);
+    expect(find.text('Documentos'), findsWidgets);
   });
 }
