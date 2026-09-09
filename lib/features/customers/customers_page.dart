@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/supabase_config.dart';
+import '../../data/collections_repository.dart';
 import '../../data/customers_repository.dart';
+import '../../data/loans_repository.dart';
 import '../../domain/loan_models.dart';
 
 class CustomersPage extends StatefulWidget {
@@ -13,6 +15,8 @@ class CustomersPage extends StatefulWidget {
 
 class _CustomersPageState extends State<CustomersPage> {
   final repository = const CustomersRepository();
+  final loansRepository = const LoansRepository();
+  final collectionsRepository = const CollectionsRepository();
   final nameController = TextEditingController();
   final documentController = TextEditingController();
   final phoneController = TextEditingController();
@@ -64,7 +68,7 @@ class _CustomersPageState extends State<CustomersPage> {
           ..clear()
           ..addAll(loaded);
       });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       setState(() => loadError = 'Não foi possível carregar clientes do Supabase.');
     } finally {
@@ -125,7 +129,7 @@ class _CustomersPageState extends State<CustomersPage> {
           ),
         ),
       );
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Erro ao salvar cliente. Verifique documento duplicado ou conexão.')),
@@ -143,7 +147,7 @@ class _CustomersPageState extends State<CustomersPage> {
       if (hasSupabaseConfig) {
         await repository.deactivateCustomer(customer.id);
       }
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       setState(() => customers.insert(oldIndex < 0 ? 0 : oldIndex, customer));
       ScaffoldMessenger.of(context).showSnackBar(
@@ -152,9 +156,86 @@ class _CustomersPageState extends State<CustomersPage> {
     }
   }
 
+  Future<void> openCustomerDetails(Customer customer) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final loans = await loansRepository.listActiveLoans();
+      final installments = await collectionsRepository.listPendingInstallments();
+      final customerLoans = loans.where((loan) => loan.customerId == customer.id).toList();
+      final loanIds = customerLoans.map((loan) => loan.id).toSet();
+      final customerInstallments = installments.where((item) => loanIds.contains(item.loanId)).toList();
+      final overdue = customerInstallments.where((item) => item.isOverdue).toList();
+      final totalOpen = customerInstallments.fold<double>(0, (sum, item) => sum + item.remainingAmount);
+      final totalLoans = customerLoans.fold<double>(0, (sum, item) => sum + item.totalDebt);
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(customer.fullName),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _DetailLine(label: 'Documento', value: customer.identification),
+                if (customer.phone != null) _DetailLine(label: 'Telefone', value: customer.phone!),
+                if (customer.email != null) _DetailLine(label: 'E-mail', value: customer.email!),
+                if (customer.address != null) _DetailLine(label: 'Endereço', value: customer.address!),
+                const Divider(),
+                _DetailLine(label: 'Empréstimos ativos', value: customerLoans.length.toString()),
+                _DetailLine(label: 'Total contratado', value: _money(totalLoans)),
+                _DetailLine(label: 'Total em aberto', value: _money(totalOpen)),
+                _DetailLine(label: 'Parcelas pendentes', value: customerInstallments.length.toString()),
+                _DetailLine(label: 'Parcelas vencidas', value: overdue.length.toString()),
+                const SizedBox(height: 12),
+                if (customerLoans.isEmpty)
+                  const Text('Este cliente ainda não possui empréstimo ativo.')
+                else
+                  for (final loan in customerLoans.take(5))
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(_money(loan.totalDebt)),
+                      subtitle: Text('${loan.paymentsNumber} parcelas • vence ${_date(loan.endDate)}'),
+                    ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('FECHAR'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível carregar detalhes do cliente.')),
+      );
+    }
+  }
+
   String? _optional(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
+  }
+
+  String _money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
+
+  String _date(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    final year = value.year.toString().padLeft(4, '0');
+    return '$day/$month/$year';
   }
 
   List<Customer> get filteredCustomers {
@@ -177,9 +258,7 @@ class _CustomersPageState extends State<CustomersPage> {
       children: [
         Text('Clientes', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 4),
-        const Text(
-          'Cadastro base para vincular empréstimos, cobranças, pagamentos e documentos.',
-        ),
+        const Text('Cadastro base para vincular empréstimos, cobranças, pagamentos e documentos.'),
         const SizedBox(height: 12),
         if (loadError != null)
           Card(
@@ -230,11 +309,7 @@ class _CustomersPageState extends State<CustomersPage> {
                 FilledButton.icon(
                   onPressed: saving ? null : saveCustomer,
                   icon: saving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.person_add_alt_1),
                   label: Text(saving ? 'Salvando...' : 'Salvar cliente'),
                 ),
@@ -245,10 +320,7 @@ class _CustomersPageState extends State<CustomersPage> {
         const SizedBox(height: 16),
         TextField(
           controller: searchController,
-          decoration: const InputDecoration(
-            labelText: 'Buscar cliente',
-            prefixIcon: Icon(Icons.search),
-          ),
+          decoration: const InputDecoration(labelText: 'Buscar cliente', prefixIcon: Icon(Icons.search)),
           onChanged: (value) => setState(() => query = value),
         ),
         const SizedBox(height: 12),
@@ -280,13 +352,12 @@ class _CustomersPageState extends State<CustomersPage> {
               child: ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.person_outline)),
                 title: Text(customer.fullName),
-                subtitle: Text(
-                  [
-                    customer.identification,
-                    if (customer.phone != null) customer.phone!,
-                    if (customer.address != null) customer.address!,
-                  ].join(' • '),
-                ),
+                subtitle: Text([
+                  customer.identification,
+                  if (customer.phone != null) customer.phone!,
+                  if (customer.address != null) customer.address!,
+                ].join(' • ')),
+                onTap: () => openCustomerDetails(customer),
                 trailing: IconButton(
                   tooltip: 'Remover cliente',
                   icon: const Icon(Icons.delete_outline),
@@ -295,6 +366,34 @@ class _CustomersPageState extends State<CustomersPage> {
               ),
             ),
       ],
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Flexible(child: Text(label)),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
