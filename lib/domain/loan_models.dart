@@ -33,6 +33,7 @@ class Customer {
     this.phone,
     this.email,
     this.address,
+    this.notes,
     this.active = true,
   });
 
@@ -42,6 +43,7 @@ class Customer {
   final String? phone;
   final String? email;
   final String? address;
+  final String? notes;
   final bool active;
 }
 
