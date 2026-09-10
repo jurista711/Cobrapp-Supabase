@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/supabase_config.dart';
 import '../../data/dashboard_repository.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -15,7 +14,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   DashboardSummary summary = const DashboardSummary.empty();
   bool loading = true;
-  String statusMessage = 'Carregando resumo...';
 
   @override
   void initState() {
@@ -24,125 +22,155 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> loadSummary() async {
-    setState(() {
-      loading = true;
-      statusMessage = 'Carregando resumo...';
-    });
-
+    setState(() => loading = true);
     try {
       final loaded = await repository.loadSummary();
       if (!mounted) return;
       setState(() {
         summary = loaded;
         loading = false;
-        statusMessage = hasSupabaseConfig
-            ? 'Resumo conectado ao Supabase.'
-            : 'Supabase não configurado neste APK.';
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        loading = false;
-        statusMessage = 'Erro ao carregar resumo. Verifique internet/Supabase.';
-      });
+      setState(() => loading = false);
     }
   }
 
   String money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
+
+  void comingSoon(String label) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label disponível pelo menu Mais.')));
+  }
 
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
       onRefresh: loadSummary,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text('Início', style: Theme.of(context).textTheme.titleLarge),
-              ),
-              IconButton(
-                onPressed: loading ? null : loadSummary,
-                icon: loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(statusMessage),
-          const SizedBox(height: 16),
-          _MetricCard(
-            title: 'Total emprestado',
-            value: money(summary.totalLoaned),
-            icon: Icons.account_balance_wallet_outlined,
-          ),
-          _MetricCard(
-            title: 'Total a receber',
-            value: money(summary.pendingAmount),
-            icon: Icons.trending_up,
-          ),
-          _MetricCard(
-            title: 'Recebido hoje',
-            value: money(summary.receivedToday),
-            icon: Icons.payments_outlined,
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: _SmallMetricCard(
-                  title: 'Clientes',
-                  value: summary.customersCount.toString(),
-                  icon: Icons.people_outline,
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Olá, Berlan 👋', style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900)),
+                    SizedBox(height: 2),
+                    Text('Que bom te ver por aqui!', style: TextStyle(color: Color(0xFF94A3B8))),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _SmallMetricCard(
-                  title: 'Empréstimos',
-                  value: summary.activeLoansCount.toString(),
-                  icon: Icons.description_outlined,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _SmallMetricCard(
-                  title: 'Parcelas pendentes',
-                  value: summary.pendingInstallments.toString(),
-                  icon: Icons.event_note_outlined,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _SmallMetricCard(
-                  title: 'Vencidas',
-                  value: summary.overdueInstallments.toString(),
-                  icon: Icons.warning_amber_outlined,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  Text('Atalho de trabalho', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  const Text('1. Cadastre o cliente.\n2. Crie o empréstimo.\n3. Acompanhe cobranças.\n4. Gere documentos em português.'),
+                  const CircleAvatar(
+                    backgroundColor: Color(0xFF111C31),
+                    child: Icon(Icons.notifications_none_rounded),
+                  ),
+                  Positioned(
+                    right: -1,
+                    top: -1,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
                 ],
               ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Saldo em carteira', style: TextStyle(color: Color(0xFFE9D5FF))),
+                      const SizedBox(height: 4),
+                      Text(
+                        money(summary.pendingAmount),
+                        style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 8),
+                      const Row(
+                        children: [
+                          Icon(Icons.trending_up_rounded, size: 17, color: Color(0xFF86EFAC)),
+                          SizedBox(width: 4),
+                          Text('Carteira ativa', style: TextStyle(color: Color(0xFFDCFCE7), fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.visibility_outlined, color: Colors.white70),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 2.2,
+            children: [
+              _MetricTile(icon: Icons.account_balance_wallet_outlined, label: 'Total emprestado', value: money(summary.totalLoaned), accent: const Color(0xFF10B981)),
+              _MetricTile(icon: Icons.payments_outlined, label: 'Recebido hoje', value: money(summary.receivedToday), accent: const Color(0xFF3B82F6)),
+              _MetricTile(icon: Icons.warning_amber_rounded, label: 'Em atraso', value: '${summary.overdueInstallments} parcelas', accent: const Color(0xFFEF4444)),
+              _MetricTile(icon: Icons.people_alt_outlined, label: 'Clientes', value: summary.customersCount.toString(), accent: const Color(0xFF8B5CF6)),
+            ],
+          ),
+          const SizedBox(height: 18),
+          const Text('Ações rápidas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: _QuickAction(icon: Icons.person_add_alt_1_rounded, label: 'Novo\ncliente', accent: const Color(0xFF7C3AED), onTap: () => comingSoon('Clientes'))),
+              const SizedBox(width: 10),
+              Expanded(child: _QuickAction(icon: Icons.account_balance_wallet_rounded, label: 'Novo\nempréstimo', accent: const Color(0xFF059669), onTap: () => comingSoon('Empréstimos'))),
+              const SizedBox(width: 10),
+              Expanded(child: _QuickAction(icon: Icons.payments_rounded, label: 'Registrar\npagamento', accent: const Color(0xFF2563EB), onTap: () => comingSoon('Pagamentos'))),
+              const SizedBox(width: 10),
+              Expanded(child: _QuickAction(icon: Icons.calculate_rounded, label: 'Calculadora', accent: const Color(0xFFEA580C), onTap: () => comingSoon('Calculadora'))),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const Expanded(child: Text('Resumo da carteira', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+              if (loading)
+                const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              else
+                IconButton(onPressed: loadSummary, icon: const Icon(Icons.refresh_rounded)),
+            ],
+          ),
+          Card(
+            child: Column(
+              children: [
+                _SummaryLine(icon: Icons.description_outlined, label: 'Empréstimos ativos', value: summary.activeLoansCount.toString()),
+                const Divider(height: 1, indent: 54),
+                _SummaryLine(icon: Icons.event_note_outlined, label: 'Parcelas pendentes', value: summary.pendingInstallments.toString()),
+                const Divider(height: 1, indent: 54),
+                _SummaryLine(icon: Icons.schedule_rounded, label: 'Parcelas vencidas', value: summary.overdueInstallments.toString()),
+              ],
             ),
           ),
         ],
@@ -151,29 +179,35 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.title, required this.value, required this.icon});
+class _MetricTile extends StatelessWidget {
+  const _MetricTile({required this.icon, required this.label, required this.value, required this.accent});
 
-  final String title;
-  final String value;
   final IconData icon;
+  final String label;
+  final String value;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            Icon(icon, size: 34),
-            const SizedBox(width: 12),
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: accent.withValues(alpha: .16),
+              child: Icon(icon, color: accent, size: 20),
+            ),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title),
-                  const SizedBox(height: 4),
-                  Text(value, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                  Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                  const SizedBox(height: 3),
+                  Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
                 ],
               ),
             ),
@@ -184,29 +218,47 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-class _SmallMetricCard extends StatelessWidget {
-  const _SmallMetricCard({required this.title, required this.value, required this.icon});
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({required this.icon, required this.label, required this.accent, required this.onTap});
 
-  final String title;
-  final String value;
   final IconData icon;
+  final String label;
+  final Color accent;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon),
-            const SizedBox(height: 10),
-            Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text(title),
-          ],
-        ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            height: 56,
+            decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(15)),
+            child: Center(child: Icon(icon, color: Colors.white, size: 27)),
+          ),
+          const SizedBox(height: 7),
+          Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, height: 1.1)),
+        ],
       ),
+    );
+  }
+}
+
+class _SummaryLine extends StatelessWidget {
+  const _SummaryLine({required this.icon, required this.label, required this.value});
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFFA78BFA)),
+      title: Text(label),
+      trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.w900)),
     );
   }
 }
