@@ -150,9 +150,9 @@ class _PaymentsPageState extends State<PaymentsPage> {
 
     String? partialSummary;
     if (mode == PaymentMode.partial) {
-      final lateApplied = math.min(amount, lateCharge);
-      final regularPaid = math.max(amount - lateApplied, 0);
-      final rolloverBase = math.max(installment.remainingAmount - regularPaid, 0);
+      final lateApplied = math.min(amount, lateCharge).toDouble();
+      final regularPaid = math.max(amount - lateApplied, 0).toDouble();
+      final rolloverBase = math.max(installment.remainingAmount - regularPaid, 0).toDouble();
       final rolloverInterest = rolloverBase * (loan.interestRate / 100);
       final rolloverTotal = rolloverBase + rolloverInterest;
       final baseDate = installment.dueDate.isAfter(DateTime.now()) ? installment.dueDate : DateTime.now();
