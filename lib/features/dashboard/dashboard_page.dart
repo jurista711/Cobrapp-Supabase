@@ -3,7 +3,18 @@ import 'package:flutter/material.dart';
 import '../../data/dashboard_repository.dart';
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  const DashboardPage({
+    super.key,
+    required this.onNewCustomer,
+    required this.onNewLoan,
+    required this.onRegisterPayment,
+    required this.onCalculator,
+  });
+
+  final VoidCallback onNewCustomer;
+  final VoidCallback onNewLoan;
+  final VoidCallback onRegisterPayment;
+  final VoidCallback onCalculator;
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -37,10 +48,6 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   String money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
-
-  void comingSoon(String label) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label disponível pelo menu Mais.')));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,10 +111,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     children: [
                       const Text('Saldo em carteira', style: TextStyle(color: Color(0xFFE9D5FF))),
                       const SizedBox(height: 4),
-                      Text(
-                        money(summary.pendingAmount),
-                        style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
-                      ),
+                      Text(money(summary.pendingAmount), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
                       const SizedBox(height: 8),
                       const Row(
                         children: [
@@ -143,13 +147,13 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _QuickAction(icon: Icons.person_add_alt_1_rounded, label: 'Novo\ncliente', accent: const Color(0xFF7C3AED), onTap: () => comingSoon('Clientes'))),
+              Expanded(child: _QuickAction(icon: Icons.person_add_alt_1_rounded, label: 'Novo\ncliente', accent: const Color(0xFF7C3AED), onTap: widget.onNewCustomer)),
               const SizedBox(width: 10),
-              Expanded(child: _QuickAction(icon: Icons.account_balance_wallet_rounded, label: 'Novo\nempréstimo', accent: const Color(0xFF059669), onTap: () => comingSoon('Empréstimos'))),
+              Expanded(child: _QuickAction(icon: Icons.account_balance_wallet_rounded, label: 'Novo\nempréstimo', accent: const Color(0xFF059669), onTap: widget.onNewLoan)),
               const SizedBox(width: 10),
-              Expanded(child: _QuickAction(icon: Icons.payments_rounded, label: 'Registrar\npagamento', accent: const Color(0xFF2563EB), onTap: () => comingSoon('Pagamentos'))),
+              Expanded(child: _QuickAction(icon: Icons.payments_rounded, label: 'Registrar\npagamento', accent: const Color(0xFF2563EB), onTap: widget.onRegisterPayment)),
               const SizedBox(width: 10),
-              Expanded(child: _QuickAction(icon: Icons.calculate_rounded, label: 'Calculadora', accent: const Color(0xFFEA580C), onTap: () => comingSoon('Calculadora'))),
+              Expanded(child: _QuickAction(icon: Icons.calculate_rounded, label: 'Calculadora', accent: const Color(0xFFEA580C), onTap: widget.onCalculator)),
             ],
           ),
           const SizedBox(height: 20),
@@ -181,7 +185,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
 class _MetricTile extends StatelessWidget {
   const _MetricTile({required this.icon, required this.label, required this.value, required this.accent});
-
   final IconData icon;
   final String label;
   final String value;
@@ -194,11 +197,7 @@ class _MetricTile extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: accent.withValues(alpha: .16),
-              child: Icon(icon, color: accent, size: 20),
-            ),
+            CircleAvatar(radius: 18, backgroundColor: accent.withValues(alpha: .16), child: Icon(icon, color: accent, size: 20)),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -220,7 +219,6 @@ class _MetricTile extends StatelessWidget {
 
 class _QuickAction extends StatelessWidget {
   const _QuickAction({required this.icon, required this.label, required this.accent, required this.onTap});
-
   final IconData icon;
   final String label;
   final Color accent;
@@ -248,7 +246,6 @@ class _QuickAction extends StatelessWidget {
 
 class _SummaryLine extends StatelessWidget {
   const _SummaryLine({required this.icon, required this.label, required this.value});
-
   final IconData icon;
   final String label;
   final String value;
