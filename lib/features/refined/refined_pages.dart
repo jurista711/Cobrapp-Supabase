@@ -5,7 +5,9 @@ import '../../data/customers_repository.dart';
 import '../../data/loans_repository.dart';
 import '../../domain/loan_models.dart';
 import '../collections/collections_page.dart';
+import '../customers/customer_edit_page.dart';
 import '../customers/customers_page.dart';
+import '../loans/loan_edit_page.dart';
 import '../loans/loans_page.dart';
 
 class CustomersRefinedPage extends StatefulWidget {
@@ -94,6 +96,13 @@ class _CustomersRefinedPageState extends State<CustomersRefinedPage> {
     await load();
   }
 
+  Future<void> openEdit(Customer customer) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => CustomerEditPage(customer: customer)),
+    );
+    if (changed == true) await load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final list = visible;
@@ -128,21 +137,26 @@ class _CustomersRefinedPageState extends State<CustomersRefinedPage> {
                 leading: CircleAvatar(child: Text(_initials(customer.fullName))),
                 title: Text(customer.fullName, style: const TextStyle(fontWeight: FontWeight.w800)),
                 subtitle: Text(customer.phone ?? customer.identification),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _StatusPill(text: overdueCustomerIds.contains(customer.id) ? 'Em atraso' : 'Ativo', overdue: overdueCustomerIds.contains(customer.id)),
-                    const SizedBox(height: 4),
-                    Text('${loanCount(customer.id)} empréstimo${loanCount(customer.id) == 1 ? '' : 's'}', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _StatusPill(text: overdueCustomerIds.contains(customer.id) ? 'Em atraso' : 'Ativo', overdue: overdueCustomerIds.contains(customer.id)),
+                        const SizedBox(height: 4),
+                        Text('${loanCount(customer.id)} empréstimo${loanCount(customer.id) == 1 ? '' : 's'}', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                      ],
+                    ),
+                    IconButton(
+                      tooltip: 'Editar cliente',
+                      onPressed: () => openEdit(customer),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
                   ],
                 ),
-                onTap: () async {
-                  await Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => Scaffold(appBar: AppBar(title: Text(customer.fullName)), body: const CustomersPage()),
-                  ));
-                  await load();
-                },
+                onTap: () => openEdit(customer),
               ),
             ),
         ],
@@ -209,6 +223,13 @@ class _LoansRefinedPageState extends State<LoansRefinedPage> {
     await load();
   }
 
+  Future<void> openEdit(LoanListItem loan) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => LoanEditPage(loanId: loan.id)),
+    );
+    if (changed == true) await load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final list = visible;
@@ -244,21 +265,26 @@ class _LoansRefinedPageState extends State<LoansRefinedPage> {
                 title: Text(loan.customerName, style: const TextStyle(fontWeight: FontWeight.w800)),
                 subtitle: Text('${_money(loan.totalDebt)}\n${loan.paymentsNumber} parcelas'),
                 isThreeLine: true,
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _StatusPill(text: loan.status, overdue: loan.status.toLowerCase().contains('atras')),
-                    const SizedBox(height: 4),
-                    Text(_date(loan.endDate), style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _StatusPill(text: loan.status, overdue: loan.status.toLowerCase().contains('atras')),
+                        const SizedBox(height: 4),
+                        Text(_date(loan.endDate), style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                      ],
+                    ),
+                    IconButton(
+                      tooltip: 'Editar empréstimo',
+                      onPressed: () => openEdit(loan),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
                   ],
                 ),
-                onTap: () async {
-                  await Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => Scaffold(appBar: AppBar(title: Text(loan.customerName)), body: const LoansPage()),
-                  ));
-                  await load();
-                },
+                onTap: () => openEdit(loan),
               ),
             ),
         ],
