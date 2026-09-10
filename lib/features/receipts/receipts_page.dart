@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -46,7 +48,7 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
     }
   }
 
-  Future<List<int>> buildPdf(ReceiptItem item) async {
+  Future<Uint8List> buildPdf(ReceiptItem item) async {
     final doc = pw.Document();
     doc.addPage(
       pw.Page(
