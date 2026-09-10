@@ -14,6 +14,10 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +33,16 @@ jobs:
             exit 1
           fi
 
+      - name: Verificar assinatura Android
+        shell: bash
+        run: |
+          for secret_name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!secret_name}" ]; then
+              echo "$secret_name não configurado nos Secrets do GitHub."
+              exit 1
+            fi
+          done
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -42,6 +56,48 @@ jobs:
 
       - name: Criar arquivos Android quando ausentes
         run: flutter create --platforms=android --org com.cobrapp .
+
+      - name: Restaurar assinatura Android
+        shell: bash
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/cobrapp-release.jks
+
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=cobrapp-release.jks
+          EOF
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('android/app/build.gradle.kts')
+          text = path.read_text()
+
+          imports = '''import java.io.FileInputStream\nimport java.util.Properties\n\n'''
+          if 'import java.util.Properties' not in text:
+              text = imports + text
+
+          props = '''val keystoreProperties = Properties()\nval keystorePropertiesFile = rootProject.file("key.properties")\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n}\n\n'''
+          if 'val keystoreProperties = Properties()' not in text:
+              marker = 'android {'
+              text = text.replace(marker, props + marker, 1)
+
+          signing = '''    signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }\n    }\n\n'''
+          if 'create("release")' not in text:
+              marker = '    buildTypes {'
+              if marker not in text:
+                  raise SystemExit('Não foi possível localizar buildTypes no build.gradle.kts')
+              text = text.replace(marker, signing + marker, 1)
+
+          text = text.replace(
+              'signingConfig = signingConfigs.getByName("debug")',
+              'signingConfig = signingConfigs.getByName("release")',
+          )
+
+          path.write_text(text)
+          PY
 
       - name: Dependências
         run: flutter pub get
@@ -59,6 +115,11 @@ jobs:
           --build-number=${{ github.run_number }}
           --dart-define=SUPABASE_URL=$SUPABASE_URL
           --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+
+      - name: Verificar assinatura do APK
+        shell: bash
+        run: |
+          keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | sed -n '1,12p'
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
