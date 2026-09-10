@@ -27,6 +27,7 @@ class _LoansPageState extends State<LoansPage> {
   String? selectedCustomerId;
   InterestType interestType = InterestType.initialCapital;
   PaymentFrequency frequency = PaymentFrequency.biweekly;
+  DateTime loanDate = DateTime.now();
   LoanCalculationResult? result;
   String? error;
   bool loading = false;
@@ -75,16 +76,15 @@ class _LoansPageState extends State<LoansPage> {
 
   void _calculateQuietly() {
     try {
-      final calculator = const LoanCalculator();
       error = null;
-      result = calculator.calculate(
+      result = const LoanCalculator().calculate(
         LoanCalculationInput(
           principal: _readNumber(principalController.text),
           interestRatePercent: _readNumber(rateController.text),
           paymentsNumber: int.parse(paymentsController.text.trim()),
           interestType: interestType,
           paymentFrequency: frequency,
-          startDate: DateTime.now(),
+          startDate: loanDate,
           customIntervalDays: int.parse(customDaysController.text.trim()),
         ),
       );
@@ -92,6 +92,22 @@ class _LoansPageState extends State<LoansPage> {
       result = null;
       error = 'Confira os valores informados.';
     }
+  }
+
+  Future<void> chooseLoanDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: loanDate.isAfter(now) ? now : loanDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(now.year, now.month, now.day),
+      helpText: 'Data do empréstimo',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      loanDate = picked;
+      _calculateQuietly();
+    });
   }
 
   Future<void> saveLoan() async {
@@ -111,13 +127,15 @@ class _LoansPageState extends State<LoansPage> {
           paymentsNumber: int.parse(paymentsController.text.trim()),
           interestType: interestType,
           paymentFrequency: frequency,
-          startDate: DateTime.now(),
+          startDate: loanDate,
           customIntervalDays: int.parse(customDaysController.text.trim()),
         ),
         result: current,
         note: noteController.text.trim().isEmpty ? null : noteController.text.trim(),
       );
       noteController.clear();
+      loanDate = DateTime.now();
+      _calculateQuietly();
       await loadData();
       if (!mounted) return;
       showMessage('Empréstimo salvo no Supabase.');
@@ -149,14 +167,8 @@ class _LoansPageState extends State<LoansPage> {
   }
 
   double _readNumber(String text) => double.parse(text.trim().replaceAll('.', '').replaceAll(',', '.'));
-
   String _money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
-
-  String _date(DateTime value) {
-    final day = value.day.toString().padLeft(2, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    return '$day/$month/${value.year}';
-  }
+  String _date(DateTime value) => '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
 
   @override
   Widget build(BuildContext context) {
@@ -174,12 +186,12 @@ class _LoansPageState extends State<LoansPage> {
             ],
           ),
           const SizedBox(height: 8),
-          Card(child: Padding(padding: const EdgeInsets.all(12), child: Text(hasSupabaseConfig ? 'Online no Supabase. Toque em um empréstimo para detalhes e baixa.' : 'Supabase não configurado neste APK.'))),
+          Card(child: Padding(padding: const EdgeInsets.all(12), child: Text(hasSupabaseConfig ? 'Online no Supabase. Você pode informar a data real do empréstimo.' : 'Supabase não configurado neste APK.'))),
           const SizedBox(height: 12),
           Text('Novo empréstimo', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
           if (customers.isEmpty)
-            const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Nenhum cliente carregado. Cadastre primeiro na tela Clientes e toque em atualizar.')))
+            const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Nenhum cliente carregado. Cadastre primeiro na tela Clientes.')))
           else
             DropdownButtonFormField<String>(
               initialValue: customers.any((customer) => customer.id == selectedCustomerId) ? selectedCustomerId : customers.first.id,
@@ -187,6 +199,8 @@ class _LoansPageState extends State<LoansPage> {
               items: customers.map((customer) => DropdownMenuItem(value: customer.id, child: Text(customer.fullName))).toList(),
               onChanged: (value) => setState(() => selectedCustomerId = value),
             ),
+          const SizedBox(height: 8),
+          _DateField(label: 'Data do empréstimo', value: _date(loanDate), onTap: chooseLoanDate),
           const SizedBox(height: 8),
           TextField(controller: principalController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Montante do empréstimo'), onChanged: (_) => calculate()),
           const SizedBox(height: 8),
@@ -246,6 +260,7 @@ class _LoansPageState extends State<LoansPage> {
                   children: [
                     Text('Resumo', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
+                    _Line(label: 'Data', value: _date(loanDate)),
                     _Line(label: 'Montante', value: _money(current.principal)),
                     _Line(label: 'Juros', value: _money(current.totalInterest)),
                     _Line(label: 'Total', value: _money(current.totalDebt)),
@@ -274,7 +289,7 @@ class _LoansPageState extends State<LoansPage> {
                 child: ListTile(
                   onTap: () => openLoanDetail(loan),
                   title: Text(loan.customerName),
-                  subtitle: Text('${loan.paymentsNumber} cotas • vence ${_date(loan.endDate)}'),
+                  subtitle: Text('${_date(loan.startDate)} • ${loan.paymentsNumber} cotas • vence ${_date(loan.endDate)}'),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -314,6 +329,7 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
   bool paying = false;
   String? error;
   String? selectedInstallmentId;
+  DateTime paymentDate = DateTime.now();
   final paymentController = TextEditingController();
   final paymentNoteController = TextEditingController();
 
@@ -343,7 +359,7 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
         detail = loaded;
         selectedInstallmentId = nextInstallment?.id;
         if (nextInstallment != null && paymentController.text.trim().isEmpty) {
-          paymentController.text = loaded.updatedRemainingFor(nextInstallment).toStringAsFixed(2).replaceAll('.', ',');
+          paymentController.text = loaded.updatedRemainingFor(nextInstallment, asOf: paymentDate).toStringAsFixed(2).replaceAll('.', ',');
         }
         loading = false;
       });
@@ -356,13 +372,33 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
     }
   }
 
+  Future<void> choosePaymentDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: paymentDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(now.year, now.month, now.day),
+      helpText: 'Data do pagamento',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      paymentDate = picked;
+      final current = detail;
+      final installment = current?.installments.where((item) => item.id == selectedInstallmentId).firstOrNull;
+      if (current != null && installment != null) {
+        paymentController.text = current.updatedRemainingFor(installment, asOf: paymentDate).toStringAsFixed(2).replaceAll('.', ',');
+      }
+    });
+  }
+
   Future<void> registerPayment() async {
     final current = detail;
     if (current == null || selectedInstallmentId == null) return;
     final installment = current.installments.firstWhere((item) => item.id == selectedInstallmentId);
     final amount = _readNumber(paymentController.text);
-    final lateCharge = current.lateChargeFor(installment);
-    final maxPayable = current.updatedRemainingFor(installment);
+    final lateCharge = current.lateChargeFor(installment, asOf: paymentDate);
+    final maxPayable = current.updatedRemainingFor(installment, asOf: paymentDate);
 
     if (amount <= 0) return showMessage('Informe um valor maior que zero.');
     if (amount > maxPayable + 0.009) return showMessage('O valor não pode passar do total atualizado da parcela.');
@@ -374,9 +410,11 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
         amount: amount,
         lateCharge: lateCharge,
         note: paymentNoteController.text.trim().isEmpty ? null : paymentNoteController.text.trim(),
+        paidAt: paymentDate,
       );
       paymentController.clear();
       paymentNoteController.clear();
+      paymentDate = DateTime.now();
       await loadDetail();
       await widget.onChanged();
       if (!mounted) return;
@@ -399,8 +437,8 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
   Widget build(BuildContext context) {
     final current = detail;
     final selectedInstallment = current?.installments.where((item) => item.id == selectedInstallmentId).firstOrNull;
-    final selectedLateCharge = current == null || selectedInstallment == null ? 0.0 : current.lateChargeFor(selectedInstallment);
-    final selectedUpdatedTotal = current == null || selectedInstallment == null ? 0.0 : current.updatedRemainingFor(selectedInstallment);
+    final selectedLateCharge = current == null || selectedInstallment == null ? 0.0 : current.lateChargeFor(selectedInstallment, asOf: paymentDate);
+    final selectedUpdatedTotal = current == null || selectedInstallment == null ? 0.0 : current.updatedRemainingFor(selectedInstallment, asOf: paymentDate);
 
     return SafeArea(
       child: Padding(
@@ -416,24 +454,18 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
                         children: [
                           Row(children: [Expanded(child: Text('Detalhe do empréstimo', style: Theme.of(context).textTheme.titleLarge)), IconButton(onPressed: loadDetail, icon: const Icon(Icons.refresh))]),
                           Text(current.customerName, style: Theme.of(context).textTheme.titleMedium),
-                          if (current.customerPhone != null) Text('Telefone: ${current.customerPhone}'),
-                          if (current.customerIdentification != null) Text('Documento: ${current.customerIdentification}'),
                           const SizedBox(height: 12),
                           Card(
                             child: Padding(
                               padding: const EdgeInsets.all(12),
                               child: Column(
                                 children: [
+                                  _Line(label: 'Data do empréstimo', value: widget.date(current.startDate)),
                                   _Line(label: 'Capital', value: widget.money(current.amount)),
                                   _Line(label: 'Juros', value: widget.money(current.totalInterest)),
                                   _Line(label: 'Total original', value: widget.money(current.totalDebt)),
-                                  _Line(label: 'Pago em parcelas', value: widget.money(current.totalPaid)),
                                   _Line(label: 'Restante original', value: widget.money(current.remaining)),
-                                  _Line(label: 'Juros atraso/dia', value: '${current.lateInterestRate.toStringAsFixed(2).replaceAll('.', ',')}%'),
-                                  _Line(label: 'Multa atraso', value: widget.money(current.lateFee)),
-                                  _Line(label: 'Carência', value: '${current.daysOfGrace} dia(s)'),
                                   _Line(label: 'Parcelas pagas', value: '${current.paidCount}/${current.installments.length}'),
-                                  _Line(label: 'Vencidas', value: '${current.overdueCount}'),
                                   _Line(label: 'Status', value: current.status),
                                 ],
                               ),
@@ -449,7 +481,7 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
                               initialValue: selectedInstallmentId,
                               decoration: const InputDecoration(labelText: 'Parcela'),
                               items: current.installments.where((item) => !item.isPaid).map((item) {
-                                final late = current.lateChargeFor(item);
+                                final late = current.lateChargeFor(item, asOf: paymentDate);
                                 final label = late > 0 ? 'Parcela ${item.number} • ${widget.money(item.remainingAmount + late)} com atraso' : 'Parcela ${item.number} • ${widget.money(item.remainingAmount)}';
                                 return DropdownMenuItem(value: item.id, child: Text(label));
                               }).toList(),
@@ -457,10 +489,12 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
                                 final next = current.installments.where((item) => item.id == value).firstOrNull;
                                 setState(() {
                                   selectedInstallmentId = value;
-                                  if (next != null) paymentController.text = current.updatedRemainingFor(next).toStringAsFixed(2).replaceAll('.', ',');
+                                  if (next != null) paymentController.text = current.updatedRemainingFor(next, asOf: paymentDate).toStringAsFixed(2).replaceAll('.', ',');
                                 });
                               },
                             ),
+                            const SizedBox(height: 8),
+                            _DateField(label: 'Data do pagamento', value: widget.date(paymentDate), onTap: choosePaymentDate),
                             if (selectedInstallment != null) ...[
                               const SizedBox(height: 8),
                               Card(
@@ -469,7 +503,7 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
                                   child: Column(
                                     children: [
                                       _Line(label: 'Restante da parcela', value: widget.money(selectedInstallment.remainingAmount)),
-                                      _Line(label: 'Dias de atraso', value: '${selectedInstallment.daysLate}'),
+                                      _Line(label: 'Dias de atraso na data escolhida', value: '${selectedInstallment.daysLateAt(paymentDate)}'),
                                       _Line(label: 'Acréscimo por atraso', value: widget.money(selectedLateCharge)),
                                       _Line(label: 'Total atualizado', value: widget.money(selectedUpdatedTotal)),
                                     ],
@@ -492,14 +526,7 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
                               child: ListTile(
                                 title: Text('Parcela ${installment.number}'),
                                 subtitle: Text('Vence ${widget.date(installment.dueDate)} • Pago ${widget.money(installment.paidAmount)}'),
-                                trailing: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(widget.money(current.updatedRemainingFor(installment)), style: const TextStyle(fontWeight: FontWeight.w700)),
-                                    Text(installment.isPaid ? 'paga' : installment.isOverdue ? '${installment.daysLate} dia(s)' : 'pendente'),
-                                  ],
-                                ),
+                                trailing: Text(installment.isPaid ? 'paga' : 'pendente'),
                               ),
                             ),
                           const SizedBox(height: 16),
@@ -517,9 +544,27 @@ class _LoanDetailSheetState extends State<LoanDetailSheet> {
   }
 }
 
+class _DateField extends StatelessWidget {
+  const _DateField({required this.label, required this.value, required this.onTap});
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: InputDecorator(
+        decoration: InputDecoration(labelText: label, prefixIcon: const Icon(Icons.calendar_month_outlined), suffixIcon: const Icon(Icons.expand_more)),
+        child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+}
+
 class _Line extends StatelessWidget {
   const _Line({required this.label, required this.value});
-
   final String label;
   final String value;
 
@@ -529,7 +574,7 @@ class _Line extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [Text(label), Text(value, style: const TextStyle(fontWeight: FontWeight.w700))],
+        children: [Expanded(child: Text(label)), const SizedBox(width: 8), Text(value, style: const TextStyle(fontWeight: FontWeight.w700))],
       ),
     );
   }
