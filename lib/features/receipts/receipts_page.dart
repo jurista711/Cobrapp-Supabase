@@ -17,6 +17,7 @@ class ReceiptsPage extends StatefulWidget {
 class _ReceiptsPageState extends State<ReceiptsPage> {
   bool loading = true;
   String? error;
+  String query = '';
   List<ReceiptItem> receipts = const [];
 
   @override
@@ -66,7 +67,7 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
             pw.Text('Data: ${date(item.issuedAt)}'),
             pw.SizedBox(height: 18),
             pw.Text(item.textContent.isEmpty
-                ? 'Recebemos o valor acima referente a pagamento registrado no CobrApp.'
+                ? 'Recebemos o valor acima referente a pagamento registrado no Roots Cobrança.'
                 : item.textContent),
             pw.SizedBox(height: 42),
             pw.Divider(),
@@ -92,6 +93,8 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: const Color(0xFF0C1629),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -99,15 +102,14 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Recibo nº ${item.number}', style: Theme.of(context).textTheme.headlineSmall),
+              Container(width: 42, height: 4, margin: const EdgeInsets.only(bottom: 18), decoration: BoxDecoration(color: const Color(0xFF334155), borderRadius: BorderRadius.circular(99))),
+              Text('Recibo nº ${item.number}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
               const SizedBox(height: 14),
-              Text('Cliente: ${item.customerName}'),
-              Text('Valor: ${money(item.amount)}'),
-              Text('Data: ${date(item.issuedAt)}'),
-              const SizedBox(height: 14),
-              Text(item.textContent.isEmpty
-                  ? 'Pagamento registrado no CobrApp.'
-                  : item.textContent),
+              _DetailLine(label: 'Cliente', value: item.customerName),
+              _DetailLine(label: 'Valor', value: money(item.amount)),
+              _DetailLine(label: 'Data', value: date(item.issuedAt)),
+              const Divider(height: 28),
+              Text(item.textContent.isEmpty ? 'Pagamento registrado no Roots Cobrança.' : item.textContent),
               const SizedBox(height: 20),
               Row(
                 children: [
@@ -115,7 +117,7 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
                     child: FilledButton.icon(
                       onPressed: () => shareReceipt(item),
                       icon: const Icon(Icons.share_outlined),
-                      label: const Text('Compartilhar PDF'),
+                      label: const Text('Compartilhar'),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -136,47 +138,69 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
   }
 
   String money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
-
-  String date(DateTime value) {
-    final day = value.day.toString().padLeft(2, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    return '$day/$month/${value.year}';
-  }
+  String date(DateTime value) => '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
 
   @override
   Widget build(BuildContext context) {
+    final filtered = receipts.where((item) {
+      final normalized = query.trim().toLowerCase();
+      if (normalized.isEmpty) return true;
+      return item.customerName.toLowerCase().contains(normalized) || item.number.toString().contains(normalized);
+    }).toList();
     final total = receipts.fold<double>(0, (sum, item) => sum + item.amount);
+
     return RefreshIndicator(
       onRefresh: loadReceipts,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
         children: [
-          Text('Recibos', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 12),
+          const Text('Recibos', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          const Text('Histórico de recibos emitidos.', style: TextStyle(color: Color(0xFF94A3B8))),
+          const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(child: _Metric(label: 'Emitidos', value: '${receipts.length}')),
+              Expanded(child: _Metric(label: 'Emitidos', value: '${receipts.length}', icon: Icons.receipt_long_outlined)),
               const SizedBox(width: 8),
-              Expanded(child: _Metric(label: 'Total', value: money(total))),
+              Expanded(child: _Metric(label: 'Total', value: money(total), icon: Icons.payments_outlined)),
             ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            decoration: const InputDecoration(hintText: 'Buscar recibo ou cliente...', prefixIcon: Icon(Icons.search)),
+            onChanged: (value) => setState(() => query = value),
           ),
           const SizedBox(height: 12),
           if (loading) const LinearProgressIndicator(),
           if (error != null) Card(child: Padding(padding: const EdgeInsets.all(12), child: Text(error!))),
-          if (!loading && receipts.isEmpty)
-            const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Nenhum recibo emitido ainda. Cada novo pagamento gera um recibo numerado automaticamente.'))),
-          for (final item in receipts)
+          if (!loading && filtered.isEmpty)
+            const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('Nenhum recibo encontrado.'))),
+          for (final item in filtered)
             Card(
+              margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
-                leading: const Icon(Icons.receipt_long_outlined),
-                title: Text('Recibo nº ${item.number}'),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                leading: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(color: const Color(0xFF261B4B), borderRadius: BorderRadius.circular(13)),
+                  child: const Icon(Icons.receipt_long_outlined, color: Color(0xFFA78BFA)),
+                ),
+                title: Text('Recibo nº ${item.number}', style: const TextStyle(fontWeight: FontWeight.w800)),
                 subtitle: Text('${item.customerName} • ${date(item.issuedAt)}'),
-                trailing: Text(money(item.amount), style: const TextStyle(fontWeight: FontWeight.w800)),
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(money(item.amount), style: const TextStyle(fontWeight: FontWeight.w900)),
+                    const Text('Abrir', style: TextStyle(fontSize: 11, color: Color(0xFFA78BFA))),
+                  ],
+                ),
                 onTap: () => openReceipt(item),
               ),
             ),
-          const SizedBox(height: 80),
+          const SizedBox(height: 70),
         ],
       ),
     );
@@ -184,15 +208,7 @@ class _ReceiptsPageState extends State<ReceiptsPage> {
 }
 
 class ReceiptItem {
-  const ReceiptItem({
-    required this.id,
-    required this.number,
-    required this.customerName,
-    required this.amount,
-    required this.issuedAt,
-    required this.textContent,
-  });
-
+  const ReceiptItem({required this.id, required this.number, required this.customerName, required this.amount, required this.issuedAt, required this.textContent});
   final String id;
   final int number;
   final String customerName;
@@ -200,16 +216,14 @@ class ReceiptItem {
   final DateTime issuedAt;
   final String textContent;
 
-  factory ReceiptItem.fromJson(Map<String, dynamic> json) {
-    return ReceiptItem(
-      id: json['id']?.toString() ?? '',
-      number: int.tryParse(json['receipt_number']?.toString() ?? '') ?? 0,
-      customerName: json['customer_name']?.toString() ?? 'Cliente',
-      amount: _toDouble(json['amount']),
-      issuedAt: DateTime.tryParse((json['payment_date'] ?? json['created_at']).toString()) ?? DateTime.now(),
-      textContent: json['notes']?.toString() ?? '',
-    );
-  }
+  factory ReceiptItem.fromJson(Map<String, dynamic> json) => ReceiptItem(
+        id: json['id']?.toString() ?? '',
+        number: int.tryParse(json['receipt_number']?.toString() ?? '') ?? 0,
+        customerName: json['customer_name']?.toString() ?? 'Cliente',
+        amount: _toDouble(json['amount']),
+        issuedAt: DateTime.tryParse((json['payment_date'] ?? json['created_at']).toString()) ?? DateTime.now(),
+        textContent: json['notes']?.toString() ?? '',
+      );
 
   static double _toDouble(dynamic value) {
     if (value is num) return value.toDouble();
@@ -218,10 +232,10 @@ class ReceiptItem {
 }
 
 class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value});
-
+  const _Metric({required this.label, required this.value, required this.icon});
   final String label;
   final String value;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -231,12 +245,28 @@ class _Metric extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 4),
+            Icon(icon, color: const Color(0xFFA78BFA)),
+            const SizedBox(height: 8),
+            Text(label, style: const TextStyle(color: Color(0xFF94A3B8))),
+            const SizedBox(height: 3),
             Text(value, style: const TextStyle(fontWeight: FontWeight.w900)),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(children: [Expanded(child: Text(label, style: const TextStyle(color: Color(0xFF94A3B8)))), Text(value, style: const TextStyle(fontWeight: FontWeight.w800))]),
     );
   }
 }
