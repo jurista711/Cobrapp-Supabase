@@ -37,8 +37,8 @@ class CobrApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const fieldBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(16)),
-      borderSide: BorderSide(color: Color(0xFF4C1D95)),
+      borderRadius: BorderRadius.all(Radius.circular(14)),
+      borderSide: BorderSide(color: Color(0xFF233A63)),
     );
 
     return MaterialApp(
@@ -47,36 +47,52 @@ class CobrApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0A0618),
+        scaffoldBackgroundColor: const Color(0xFF060B18),
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF8B5CF6),
-          secondary: Color(0xFFEC4899),
-          tertiary: Color(0xFFEF4444),
-          surface: Color(0xFF120A2B),
-          onSurface: Color(0xFFF8F5FF),
+          primary: Color(0xFF8B3DFF),
+          secondary: Color(0xFFA855F7),
+          tertiary: Color(0xFF22C55E),
+          surface: Color(0xFF0C1629),
+          onSurface: Color(0xFFF8FAFC),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF060B18),
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
         ),
         cardTheme: CardThemeData(
-          color: const Color(0xFF17102F),
+          color: const Color(0xFF0D172B),
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFF182C4A)),
+          ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: const Color(0xFF120A2B),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          fillColor: const Color(0xFF0D1A31),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           border: fieldBorder,
           enabledBorder: fieldBorder,
           focusedBorder: fieldBorder.copyWith(
-            borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 1.8),
+            borderSide: const BorderSide(color: Color(0xFF8B3DFF), width: 1.6),
           ),
-          errorBorder: fieldBorder.copyWith(
-            borderSide: const BorderSide(color: Color(0xFFFF5252)),
+          hintStyle: const TextStyle(color: Color(0xFF7183A7)),
+          labelStyle: const TextStyle(color: Color(0xFFCBD5E1)),
+        ),
+        navigationBarTheme: const NavigationBarThemeData(
+          backgroundColor: Color(0xFF07101F),
+          indicatorColor: Color(0x332C1DFF),
+          height: 68,
+          labelTextStyle: WidgetStatePropertyAll(TextStyle(fontSize: 11)),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF8B3DFF),
+            foregroundColor: Colors.white,
+            minimumSize: const Size(0, 48),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
-          focusedErrorBorder: fieldBorder.copyWith(
-            borderSide: const BorderSide(color: Color(0xFFFF5252), width: 1.8),
-          ),
-          hintStyle: const TextStyle(color: Color(0xFF8B7AB8)),
-          labelStyle: const TextStyle(color: Color(0xFFD8CCFF)),
         ),
       ),
       home: ActivationGate(
@@ -98,122 +114,147 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int index = 0;
-  Widget? drawerPage;
-  String drawerTitle = 'Roots Cobrança';
 
   late final pages = <Widget>[
     const DashboardPage(),
     const CustomersPage(),
     const LoansPage(),
     const CollectionsPage(),
-    const CashPage(),
+    MorePage(openPage: openStandalone),
   ];
 
-  final bottomTitles = const <String>[
-    'Início',
-    'Clientes',
-    'Empréstimos',
-    'Cobranças',
-    'Caixa',
-  ];
-
-  void openDrawerPage(String title, Widget page) {
-    Navigator.of(context).pop();
-    setState(() {
-      drawerTitle = title;
-      drawerPage = page;
-    });
-  }
-
-  void openMainPage(int value) {
-    setState(() {
-      index = value;
-      drawerPage = null;
-      drawerTitle = 'Roots Cobrança';
-    });
+  void openStandalone(String title, Widget page) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: Text(title)),
+          body: page,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final activeTitle = drawerPage == null ? bottomTitles[index] : drawerTitle;
     return Scaffold(
-      appBar: AppBar(title: Text(activeTitle == 'Início' ? 'Roots Cobrança' : activeTitle)),
-      drawer: Drawer(
-        child: SafeArea(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              const DrawerHeader(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Icon(Icons.account_balance_wallet_rounded, size: 42),
-                    SizedBox(height: 10),
-                    Text('Roots Cobrança', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-                    Text('Gestão de empréstimos e cobranças'),
-                  ],
-                ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (widget.bootstrapError != null)
+              MaterialBanner(
+                content: const Text('Falha ao conectar ao Supabase.'),
+                actions: [
+                  TextButton(
+                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(widget.bootstrapError!)),
+                    ),
+                    child: const Text('DETALHES'),
+                  ),
+                ],
               ),
-              _DrawerItem(icon: Icons.dashboard_outlined, title: 'Início', onTap: () => openMainPage(0)),
-              _DrawerItem(icon: Icons.people_outline, title: 'Clientes', onTap: () => openMainPage(1)),
-              _DrawerItem(icon: Icons.account_balance_wallet_outlined, title: 'Empréstimos', onTap: () => openMainPage(2)),
-              _DrawerItem(icon: Icons.event_available_outlined, title: 'Cobranças', onTap: () => openMainPage(3)),
-              _DrawerItem(icon: Icons.point_of_sale_outlined, title: 'Caixa', onTap: () => openMainPage(4)),
-              const Divider(),
-              _DrawerItem(icon: Icons.payments_outlined, title: 'Pagamentos', onTap: () => openDrawerPage('Pagamentos', const PaymentsPage())),
-              _DrawerItem(icon: Icons.receipt_long_outlined, title: 'Recibos', onTap: () => openDrawerPage('Recibos', const ReceiptsPage())),
-              _DrawerItem(icon: Icons.route_outlined, title: 'Rotas', onTap: () => openDrawerPage('Rotas', const RoutesPage())),
-              _DrawerItem(icon: Icons.bar_chart_outlined, title: 'Relatórios', onTap: () => openDrawerPage('Relatórios', const ReportsPage())),
-              _DrawerItem(icon: Icons.pie_chart_outline, title: 'Gestão da Carteira', onTap: () => openDrawerPage('Gestão da Carteira', const PortfolioPage())),
-              _DrawerItem(icon: Icons.calculate_outlined, title: 'Calculadora', onTap: () => openDrawerPage('Calculadora', const CalculatorPage())),
-              _DrawerItem(icon: Icons.settings_outlined, title: 'Configurações', onTap: () => openDrawerPage('Configurações', const SettingsPage())),
-              _DrawerItem(icon: Icons.description_outlined, title: 'Documentos', onTap: () => openDrawerPage('Documentos', const DocumentsPage())),
-            ],
-          ),
+            Expanded(child: IndexedStack(index: index, children: pages)),
+          ],
         ),
       ),
-      body: Column(
-        children: [
-          if (widget.bootstrapError != null)
-            MaterialBanner(
-              content: const Text('Supabase ainda não foi configurado neste APK. A interface continua disponível para validação.'),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(widget.bootstrapError!)));
-                  },
-                  child: const Text('DETALHES'),
-                ),
-              ],
-            ),
-          Expanded(child: drawerPage ?? pages[index]),
-        ],
-      ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: drawerPage == null ? index : 0,
-        onDestinationSelected: openMainPage,
+        selectedIndex: index,
+        onDestinationSelected: (value) => setState(() => index = value),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Início'),
-          NavigationDestination(icon: Icon(Icons.people_outline), label: 'Clientes'),
-          NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: 'Empréstimos'),
-          NavigationDestination(icon: Icon(Icons.event_available_outlined), label: 'Cobranças'),
-          NavigationDestination(icon: Icon(Icons.point_of_sale_outlined), label: 'Caixa'),
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Início'),
+          NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people_rounded), label: 'Clientes'),
+          NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet_rounded), label: 'Empréstimos'),
+          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long_rounded), label: 'Cobranças'),
+          NavigationDestination(icon: Icon(Icons.more_horiz_rounded), label: 'Mais'),
         ],
       ),
     );
   }
 }
 
-class _DrawerItem extends StatelessWidget {
-  const _DrawerItem({required this.icon, required this.title, required this.onTap});
+class MorePage extends StatelessWidget {
+  const MorePage({super.key, required this.openPage});
 
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
+  final void Function(String title, Widget page) openPage;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(leading: Icon(icon), title: Text(title), onTap: onTap);
+    final items = <({IconData icon, String title, Widget page})>[
+      (icon: Icons.account_balance_wallet_outlined, title: 'Empréstimos', page: const LoansPage()),
+      (icon: Icons.payments_outlined, title: 'Pagamentos', page: const PaymentsPage()),
+      (icon: Icons.calculate_outlined, title: 'Calculadora', page: const CalculatorPage()),
+      (icon: Icons.receipt_long_outlined, title: 'Recibos', page: const ReceiptsPage()),
+      (icon: Icons.point_of_sale_outlined, title: 'Caixa', page: const CashPage()),
+      (icon: Icons.route_outlined, title: 'Rotas', page: const RoutesPage()),
+      (icon: Icons.bar_chart_outlined, title: 'Relatórios', page: const ReportsPage()),
+      (icon: Icons.pie_chart_outline, title: 'Gestão da Carteira', page: const PortfolioPage()),
+      (icon: Icons.description_outlined, title: 'Documentos', page: const DocumentsPage()),
+      (icon: Icons.settings_outlined, title: 'Configurações', page: const SettingsPage()),
+    ];
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+      children: [
+        const Text('Mais', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 14),
+        Card(
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            leading: const CircleAvatar(
+              radius: 24,
+              backgroundColor: Color(0xFF7C3AED),
+              child: Icon(Icons.person_rounded, color: Colors.white),
+            ),
+            title: const Text('Roots Cobrança', style: TextStyle(fontWeight: FontWeight.w800)),
+            subtitle: const Text('Gestão de empréstimos e cobranças'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Card(
+          child: Column(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                ListTile(
+                  leading: Icon(items[i].icon),
+                  title: Text(items[i].title),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => openPage(items[i].title, items[i].page),
+                ),
+                if (i != items.length - 1) const Divider(height: 1, indent: 56),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFFA855F7)]),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.trending_up_rounded, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Roots Cobrança', style: TextStyle(fontWeight: FontWeight.w900)),
+                      Text('Mais controle para o seu negócio.', style: TextStyle(color: Color(0xFF94A3B8))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
