@@ -30,22 +30,44 @@ class LoansRepository {
     return LoanDetail.fromJson(json, installmentRows, paymentRows);
   }
 
-  Future<void> registerPartialPayment({
+  Future<PaymentRegistrationResult> registerPayment({
     required LoanInstallmentDetail installment,
     required double amount,
     double lateCharge = 0,
-    String method = 'manual',
+    String method = 'Dinheiro',
     String? note,
+    PaymentMode mode = PaymentMode.total,
   }) async {
-    await licensedRpc(
-      'cobrapp_app_register_payment',
+    final response = await licensedRpc(
+      'cobrapp_app_register_payment_v2',
       params: {
         'p_installment_id': installment.id,
         'p_amount': _money(amount),
         'p_late_charge': _money(lateCharge),
         'p_method': method,
         'p_note': note,
+        'p_type': mode.databaseValue,
       },
+    );
+    return PaymentRegistrationResult.fromJson(Map<String, dynamic>.from(response as Map));
+  }
+
+  Future<void> registerPartialPayment({
+    required LoanInstallmentDetail installment,
+    required double amount,
+    double lateCharge = 0,
+    String method = 'Dinheiro',
+    String? note,
+  }) async {
+    final totalUpdated = installment.remainingAmount + lateCharge;
+    final mode = amount + 0.009 >= totalUpdated ? PaymentMode.total : PaymentMode.partial;
+    await registerPayment(
+      installment: installment,
+      amount: amount,
+      lateCharge: lateCharge,
+      method: method,
+      note: note,
+      mode: mode,
     );
   }
 
@@ -95,6 +117,47 @@ class LoansRepository {
   }
 
   double _money(double value) => double.parse(value.toStringAsFixed(2));
+}
+
+enum PaymentMode { total, partial, advance }
+
+extension PaymentModeDatabase on PaymentMode {
+  String get databaseValue {
+    switch (this) {
+      case PaymentMode.total:
+        return 'total';
+      case PaymentMode.partial:
+        return 'partial';
+      case PaymentMode.advance:
+        return 'advance';
+    }
+  }
+}
+
+class PaymentRegistrationResult {
+  const PaymentRegistrationResult({
+    required this.paymentId,
+    required this.receiptId,
+    required this.receiptNumber,
+    required this.mode,
+    required this.amount,
+  });
+
+  final String paymentId;
+  final String receiptId;
+  final int receiptNumber;
+  final String mode;
+  final double amount;
+
+  factory PaymentRegistrationResult.fromJson(Map<String, dynamic> json) {
+    return PaymentRegistrationResult(
+      paymentId: json['payment_id']?.toString() ?? '',
+      receiptId: json['receipt_id']?.toString() ?? '',
+      receiptNumber: int.tryParse(json['receipt_number']?.toString() ?? '') ?? 0,
+      mode: json['type']?.toString() ?? 'total',
+      amount: _toDouble(json['amount']),
+    );
+  }
 }
 
 class LoanDetail {
