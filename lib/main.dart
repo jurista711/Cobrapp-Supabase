@@ -5,14 +5,13 @@ import 'package:flutter/material.dart';
 import 'core/supabase_config.dart';
 import 'features/activation/activation_page.dart';
 import 'features/cash/cash_page.dart';
-import 'features/collections/collections_page.dart';
-import 'features/customers/customers_page.dart';
 import 'features/dashboard/dashboard_page.dart';
 import 'features/documents/documents_page.dart';
 import 'features/extra/extra_pages.dart' hide PaymentsPage, ReceiptsPage;
 import 'features/loans/loans_page.dart';
 import 'features/payments/payments_page.dart';
 import 'features/receipts/receipts_page.dart';
+import 'features/refined/refined_pages.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -117,9 +116,9 @@ class _HomePageState extends State<HomePage> {
 
   late final pages = <Widget>[
     const DashboardPage(),
-    const CustomersPage(),
-    const LoansPage(),
-    const CollectionsPage(),
+    const CustomersRefinedPage(),
+    const LoansRefinedPage(),
+    const CollectionsRefinedPage(),
     MorePage(openPage: openStandalone),
   ];
 
