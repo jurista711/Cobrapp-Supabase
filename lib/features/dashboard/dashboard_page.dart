@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/licensed_rpc.dart';
 import '../../data/dashboard_repository.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -25,11 +28,13 @@ class _DashboardPageState extends State<DashboardPage> {
 
   DashboardSummary summary = const DashboardSummary.empty();
   bool loading = true;
+  _AppUpdateInfo? updateInfo;
 
   @override
   void initState() {
     super.initState();
     loadSummary();
+    checkForUpdate();
   }
 
   Future<void> loadSummary() async {
@@ -47,12 +52,46 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  Future<void> checkForUpdate() async {
+    try {
+      final package = await PackageInfo.fromPlatform();
+      final currentCode = int.tryParse(package.buildNumber) ?? 0;
+      final response = await licensedRpc('cobrapp_app_latest_version');
+      if (response == null || !mounted) return;
+      final map = Map<String, dynamic>.from(response as Map);
+      final remoteCode = int.tryParse(map['version_code']?.toString() ?? '') ?? 0;
+      if (remoteCode <= currentCode) {
+        if (updateInfo != null) setState(() => updateInfo = null);
+        return;
+      }
+      setState(() => updateInfo = _AppUpdateInfo.fromJson(map));
+    } catch (_) {
+      // A checagem de atualização não deve impedir o uso normal do aplicativo.
+    }
+  }
+
+  Future<void> openUpdate() async {
+    final info = updateInfo;
+    if (info == null) return;
+    final uri = Uri.tryParse(info.downloadUrl);
+    if (uri == null) return;
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível abrir o link da atualização.')),
+      );
+    }
+  }
+
   String money(double value) => 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
 
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: loadSummary,
+      onRefresh: () async {
+        await loadSummary();
+        await checkForUpdate();
+      },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
@@ -92,6 +131,45 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             ],
           ),
+          if (updateInfo != null) ...[
+            const SizedBox(height: 14),
+            Card(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: openUpdate,
+                child: Padding(
+                  padding: const EdgeInsets.all(15),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const CircleAvatar(
+                        backgroundColor: Color(0xFF7C3AED),
+                        child: Icon(Icons.system_update_alt_rounded, color: Colors.white),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(updateInfo!.title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                            const SizedBox(height: 3),
+                            Text('Versão ${updateInfo!.versionName}', style: const TextStyle(color: Color(0xFFA78BFA), fontWeight: FontWeight.w700)),
+                            if (updateInfo!.message.isNotEmpty) ...[
+                              const SizedBox(height: 5),
+                              Text(updateInfo!.message, style: const TextStyle(color: Color(0xFFCBD5E1))),
+                            ],
+                            const SizedBox(height: 8),
+                            const Text('Toque para atualizar', style: TextStyle(color: Color(0xFFBFA7FF), fontWeight: FontWeight.w800)),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           Container(
             padding: const EdgeInsets.all(18),
@@ -179,6 +257,29 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AppUpdateInfo {
+  const _AppUpdateInfo({
+    required this.versionName,
+    required this.title,
+    required this.message,
+    required this.downloadUrl,
+  });
+
+  final String versionName;
+  final String title;
+  final String message;
+  final String downloadUrl;
+
+  factory _AppUpdateInfo.fromJson(Map<String, dynamic> json) {
+    return _AppUpdateInfo(
+      versionName: json['version_name']?.toString() ?? '',
+      title: json['title']?.toString() ?? 'Nova atualização disponível',
+      message: json['message']?.toString() ?? '',
+      downloadUrl: json['download_url']?.toString() ?? '',
     );
   }
 }
