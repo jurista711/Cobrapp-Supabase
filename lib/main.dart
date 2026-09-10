@@ -8,6 +8,7 @@ import 'features/cash/cash_page.dart';
 import 'features/dashboard/dashboard_page.dart';
 import 'features/documents/documents_page.dart';
 import 'features/extra/extra_pages.dart' hide PaymentsPage, ReceiptsPage;
+import 'features/customers/customers_page.dart';
 import 'features/loans/loans_page.dart';
 import 'features/payments/payments_page.dart';
 import 'features/receipts/receipts_page.dart';
@@ -115,7 +116,12 @@ class _HomePageState extends State<HomePage> {
   int index = 0;
 
   late final pages = <Widget>[
-    const DashboardPage(),
+    DashboardPage(
+      onNewCustomer: () => openStandalone('Novo cliente', const CustomersPage()),
+      onNewLoan: () => openStandalone('Novo empréstimo', const LoansPage()),
+      onRegisterPayment: () => openStandalone('Registrar pagamento', const PaymentsPage()),
+      onCalculator: () => openStandalone('Calculadora', const CalculatorPage()),
+    ),
     const CustomersRefinedPage(),
     const LoansRefinedPage(),
     const CollectionsRefinedPage(),
