@@ -22,6 +22,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
   String? selectedInstallmentId;
   PaymentMode mode = PaymentMode.total;
   String method = 'Dinheiro';
+  DateTime paymentDate = DateTime.now();
   bool loading = true;
   bool paying = false;
   String? error;
@@ -93,6 +94,20 @@ class _PaymentsPageState extends State<PaymentsPage> {
     }
   }
 
+  Future<void> choosePaymentDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: paymentDate.isAfter(now) ? now : paymentDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(now.year, now.month, now.day),
+      helpText: 'Data do pagamento',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => paymentDate = picked);
+    _syncAmount();
+  }
+
   void _syncAmount() {
     final loan = detail;
     final installment = _selectedInstallment;
@@ -101,7 +116,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
       return;
     }
     if (mode == PaymentMode.total) {
-      amountController.text = _number(loan.updatedRemainingFor(installment));
+      amountController.text = _number(loan.updatedRemainingFor(installment, asOf: paymentDate));
     } else if (mode == PaymentMode.advance) {
       amountController.text = _number(_maxAdvance);
     } else {
@@ -126,7 +141,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
     final open = loan.installments
         .where((item) => !item.isPaid)
         .fold<double>(0, (sum, item) => sum + item.remainingAmount);
-    return open + loan.lateChargeFor(installment);
+    return open + loan.lateChargeFor(installment, asOf: paymentDate);
   }
 
   Future<void> registerPayment() async {
@@ -134,8 +149,8 @@ class _PaymentsPageState extends State<PaymentsPage> {
     final installment = _selectedInstallment;
     if (loan == null || installment == null) return;
     final amount = _parse(amountController.text);
-    final lateCharge = loan.lateChargeFor(installment);
-    final selectedTotal = loan.updatedRemainingFor(installment);
+    final lateCharge = loan.lateChargeFor(installment, asOf: paymentDate);
+    final selectedTotal = loan.updatedRemainingFor(installment, asOf: paymentDate);
 
     if (amount <= 0) return _message('Informe um valor maior que zero.');
     if (mode == PaymentMode.total && (amount - selectedTotal).abs() > 0.009) {
@@ -155,7 +170,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
       final rolloverBase = math.max(installment.remainingAmount - regularPaid, 0).toDouble();
       final rolloverInterest = rolloverBase * (loan.interestRate / 100);
       final rolloverTotal = rolloverBase + rolloverInterest;
-      final baseDate = installment.dueDate.isAfter(DateTime.now()) ? installment.dueDate : DateTime.now();
+      final baseDate = installment.dueDate.isAfter(paymentDate) ? installment.dueDate : paymentDate;
       final nextDate = DateTime(baseDate.year, baseDate.month + 1, baseDate.day);
       partialSummary = 'Saldo-base: ${_money(rolloverBase)} • Juros: ${_money(rolloverInterest)} • Novo total: ${_money(rolloverTotal)} • Próxima cobrança: ${_date(nextDate)}';
     }
@@ -173,7 +188,9 @@ class _PaymentsPageState extends State<PaymentsPage> {
         method: method,
         note: noteController.text.trim().isEmpty ? null : noteController.text.trim(),
         mode: mode,
+        paidAt: paymentDate,
       );
+      final paidDate = paymentDate;
       final loanId = selectedLoanId;
       if (loanId != null) await selectLoan(loanId);
       if (!mounted) return;
@@ -181,8 +198,9 @@ class _PaymentsPageState extends State<PaymentsPage> {
         lastResult = result;
         lastPartialSummary = partialSummary;
         noteController.clear();
+        paymentDate = DateTime.now();
       });
-      _message('Pagamento registrado. Recibo nº ${result.receiptNumber}.');
+      _message('Pagamento de ${_date(paidDate)} registrado. Recibo nº ${result.receiptNumber}.');
     } catch (e) {
       if (!mounted) return;
       _message('Não foi possível registrar o pagamento: $e');
@@ -205,8 +223,8 @@ class _PaymentsPageState extends State<PaymentsPage> {
     final loan = detail;
     final installment = _selectedInstallment;
     final pending = loan?.installments.where((item) => !item.isPaid).toList() ?? const <LoanInstallmentDetail>[];
-    final selectedLate = loan == null || installment == null ? 0.0 : loan.lateChargeFor(installment);
-    final selectedTotal = loan == null || installment == null ? 0.0 : loan.updatedRemainingFor(installment);
+    final selectedLate = loan == null || installment == null ? 0.0 : loan.lateChargeFor(installment, asOf: paymentDate);
+    final selectedTotal = loan == null || installment == null ? 0.0 : loan.updatedRemainingFor(installment, asOf: paymentDate);
 
     return RefreshIndicator(
       onRefresh: loadLoans,
@@ -216,7 +234,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
         children: [
           const Text('Pagamentos', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          const Text('Registre recebimentos e acompanhe o novo saldo.', style: TextStyle(color: Color(0xFF94A3B8))),
+          const Text('Registre recebimentos usando a data em que o pagamento realmente aconteceu.', style: TextStyle(color: Color(0xFF94A3B8))),
           const SizedBox(height: 14),
           if (loading) const LinearProgressIndicator(),
           if (error != null) Card(child: Padding(padding: const EdgeInsets.all(12), child: Text(error!))),
@@ -263,6 +281,8 @@ class _PaymentsPageState extends State<PaymentsPage> {
               ),
             if (installment != null) ...[
               const SizedBox(height: 12),
+              _DateField(label: 'Data do pagamento', value: _date(paymentDate), onTap: choosePaymentDate),
+              const SizedBox(height: 12),
               SegmentedButton<PaymentMode>(
                 segments: const [
                   ButtonSegment(value: PaymentMode.total, label: Text('Exato')),
@@ -282,7 +302,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
                   child: Column(
                     children: [
                       _Line(label: 'Restante da parcela', value: _money(installment.remainingAmount)),
-                      _Line(label: 'Dias de atraso', value: '${installment.daysLate}'),
+                      _Line(label: 'Dias de atraso na data escolhida', value: '${installment.daysLateAt(paymentDate)}'),
                       _Line(label: 'Mora / acréscimo', value: _money(selectedLate)),
                       _Line(label: 'Total atualizado', value: _money(selectedTotal)),
                       if (mode == PaymentMode.advance) _Line(label: 'Máximo para adiantar', value: _money(_maxAdvance)),
@@ -300,7 +320,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
                       children: [
                         Icon(Icons.update_rounded, color: Color(0xFFA78BFA)),
                         SizedBox(width: 10),
-                        Expanded(child: Text('Pagamento parcial: o saldo restante será prorrogado para o próximo mês e recalculado com a taxa do empréstimo.')),
+                        Expanded(child: Text('Pagamento parcial: o saldo restante será prorrogado a partir da data escolhida e recalculado com a taxa do empréstimo.')),
                       ],
                     ),
                   ),
@@ -377,6 +397,25 @@ class _PaymentsPageState extends State<PaymentsPage> {
           ],
           const SizedBox(height: 70),
         ],
+      ),
+    );
+  }
+}
+
+class _DateField extends StatelessWidget {
+  const _DateField({required this.label, required this.value, required this.onTap});
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: InputDecorator(
+        decoration: InputDecoration(labelText: label, prefixIcon: const Icon(Icons.calendar_month_outlined), suffixIcon: const Icon(Icons.expand_more)),
+        child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
     );
   }
