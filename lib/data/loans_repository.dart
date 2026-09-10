@@ -37,9 +37,11 @@ class LoansRepository {
     String method = 'Dinheiro',
     String? note,
     PaymentMode mode = PaymentMode.total,
+    DateTime? paidAt,
   }) async {
+    final paymentDate = paidAt ?? DateTime.now();
     final response = await licensedRpc(
-      'cobrapp_app_register_payment_v2',
+      'cobrapp_app_register_payment_v3',
       params: {
         'p_installment_id': installment.id,
         'p_amount': _money(amount),
@@ -47,6 +49,7 @@ class LoansRepository {
         'p_method': method,
         'p_note': note,
         'p_type': mode.databaseValue,
+        'p_paid_at': _date(paymentDate),
       },
     );
     return PaymentRegistrationResult.fromJson(Map<String, dynamic>.from(response as Map));
@@ -58,6 +61,7 @@ class LoansRepository {
     double lateCharge = 0,
     String method = 'Dinheiro',
     String? note,
+    DateTime? paidAt,
   }) async {
     final totalUpdated = installment.remainingAmount + lateCharge;
     final mode = amount + 0.009 >= totalUpdated ? PaymentMode.total : PaymentMode.partial;
@@ -68,6 +72,7 @@ class LoansRepository {
       method: method,
       note: note,
       mode: mode,
+      paidAt: paidAt,
     );
   }
 
@@ -213,16 +218,16 @@ class LoanDetail {
   int get paidCount => installments.where((item) => item.status == 'paid').length;
   int get overdueCount => installments.where((item) => item.isOverdue && item.status != 'paid').length;
 
-  double lateChargeFor(LoanInstallmentDetail installment) {
-    if (installment.isPaid || !installment.isOverdue) return 0;
-    final billableDays = installment.daysLate - daysOfGrace;
+  double lateChargeFor(LoanInstallmentDetail installment, {DateTime? asOf}) {
+    if (installment.isPaid) return 0;
+    final billableDays = installment.daysLateAt(asOf ?? DateTime.now()) - daysOfGrace;
     if (billableDays <= 0) return 0;
     final dailyLateInterest = installment.remainingAmount * (lateInterestRate / 100) * billableDays;
     return lateFee + dailyLateInterest;
   }
 
-  double updatedRemainingFor(LoanInstallmentDetail installment) {
-    return installment.remainingAmount + lateChargeFor(installment);
+  double updatedRemainingFor(LoanInstallmentDetail installment, {DateTime? asOf}) {
+    return installment.remainingAmount + lateChargeFor(installment, asOf: asOf);
   }
 
   factory LoanDetail.fromJson(
@@ -297,13 +302,14 @@ class LoanInstallmentDetail {
 
   bool get isPaid => status == 'paid';
 
-  int get daysLate {
-    final today = DateTime.now();
-    final cleanToday = DateTime(today.year, today.month, today.day);
+  int daysLateAt(DateTime asOf) {
+    final cleanAsOf = DateTime(asOf.year, asOf.month, asOf.day);
     final cleanDue = DateTime(dueDate.year, dueDate.month, dueDate.day);
-    final difference = cleanToday.difference(cleanDue).inDays;
+    final difference = cleanAsOf.difference(cleanDue).inDays;
     return difference < 0 ? 0 : difference;
   }
+
+  int get daysLate => daysLateAt(DateTime.now());
 
   bool get isOverdue => daysLate > 0;
 
