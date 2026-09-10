@@ -9,8 +9,10 @@ import 'features/collections/collections_page.dart';
 import 'features/customers/customers_page.dart';
 import 'features/dashboard/dashboard_page.dart';
 import 'features/documents/documents_page.dart';
-import 'features/extra/extra_pages.dart';
+import 'features/extra/extra_pages.dart' hide PaymentsPage, ReceiptsPage;
 import 'features/loans/loans_page.dart';
+import 'features/payments/payments_page.dart';
+import 'features/receipts/receipts_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
