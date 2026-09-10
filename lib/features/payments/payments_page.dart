@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../data/loans_repository.dart';
@@ -24,6 +26,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
   bool paying = false;
   String? error;
   PaymentRegistrationResult? lastResult;
+  String? lastPartialSummary;
 
   @override
   void initState() {
@@ -69,6 +72,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
       loading = true;
       error = null;
       lastResult = null;
+      lastPartialSummary = null;
     });
     try {
       final loaded = await repository.getLoanDetail(loanId);
@@ -144,9 +148,22 @@ class _PaymentsPageState extends State<PaymentsPage> {
       return _message('O adiantamento não pode ultrapassar o saldo total em aberto.');
     }
 
+    String? partialSummary;
+    if (mode == PaymentMode.partial) {
+      final lateApplied = math.min(amount, lateCharge);
+      final regularPaid = math.max(amount - lateApplied, 0);
+      final rolloverBase = math.max(installment.remainingAmount - regularPaid, 0);
+      final rolloverInterest = rolloverBase * (loan.interestRate / 100);
+      final rolloverTotal = rolloverBase + rolloverInterest;
+      final baseDate = installment.dueDate.isAfter(DateTime.now()) ? installment.dueDate : DateTime.now();
+      final nextDate = DateTime(baseDate.year, baseDate.month + 1, baseDate.day);
+      partialSummary = 'Saldo-base: ${_money(rolloverBase)} • Juros: ${_money(rolloverInterest)} • Novo total: ${_money(rolloverTotal)} • Próxima cobrança: ${_date(nextDate)}';
+    }
+
     setState(() {
       paying = true;
       lastResult = null;
+      lastPartialSummary = null;
     });
     try {
       final result = await repository.registerPayment(
@@ -162,6 +179,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
       if (!mounted) return;
       setState(() {
         lastResult = result;
+        lastPartialSummary = partialSummary;
         noteController.clear();
       });
       _message('Pagamento registrado. Recibo nº ${result.receiptNumber}.');
@@ -177,11 +195,10 @@ class _PaymentsPageState extends State<PaymentsPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
-  double _parse(String value) =>
-      double.tryParse(value.trim().replaceAll('.', '').replaceAll(',', '.')) ?? 0;
-
+  double _parse(String value) => double.tryParse(value.trim().replaceAll('.', '').replaceAll(',', '.')) ?? 0;
   String _number(double value) => value.toStringAsFixed(2).replaceAll('.', ',');
   String _money(double value) => 'R\$ ${_number(value)}';
+  String _date(DateTime value) => '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
 
   @override
   Widget build(BuildContext context) {
@@ -195,44 +212,49 @@ class _PaymentsPageState extends State<PaymentsPage> {
       onRefresh: loadLoans,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
         children: [
-          Text('Pagamentos', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 12),
+          const Text('Pagamentos', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          const Text('Registre recebimentos e acompanhe o novo saldo.', style: TextStyle(color: Color(0xFF94A3B8))),
+          const SizedBox(height: 14),
           if (loading) const LinearProgressIndicator(),
           if (error != null) Card(child: Padding(padding: const EdgeInsets.all(12), child: Text(error!))),
           if (!loading && loans.isEmpty)
-            const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Nenhum empréstimo ativo para receber pagamento.'))),
+            const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('Nenhum empréstimo ativo para receber pagamento.'))),
           if (loans.isNotEmpty) ...[
             DropdownButtonFormField<String>(
               initialValue: selectedLoanId != null && loans.any((item) => item.id == selectedLoanId) ? selectedLoanId : loans.first.id,
-              decoration: const InputDecoration(labelText: 'Empréstimo / cliente'),
-              items: loans.map((item) => DropdownMenuItem(value: item.id, child: Text('${item.customerName} • ${_money(item.totalDebt)}'))).toList(),
+              decoration: const InputDecoration(labelText: 'Cliente / empréstimo', prefixIcon: Icon(Icons.person_search_outlined)),
+              items: loans.map((item) => DropdownMenuItem(value: item.id, child: Text(item.customerName))).toList(),
               onChanged: selectLoan,
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
           ],
           if (loan != null) ...[
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(loan.customerName, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 6),
-                    Text('Saldo em aberto: ${_money(loan.remaining)}'),
-                    Text('Parcelas pendentes: ${loan.pendingCount}'),
-                    Text('Parcelas vencidas: ${loan.overdueCount}'),
-                  ],
-                ),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF6D28D9), Color(0xFF8B3DFF)]),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(loan.customerName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  const Text('Saldo em aberto', style: TextStyle(color: Color(0xFFE9D5FF))),
+                  Text(_money(loan.remaining), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  Text('${loan.pendingCount} parcela(s) pendente(s) • ${loan.overdueCount} vencida(s)'),
+                ],
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
             if (pending.isNotEmpty)
               DropdownButtonFormField<String>(
                 initialValue: selectedInstallmentId,
-                decoration: const InputDecoration(labelText: 'Parcela inicial'),
+                decoration: const InputDecoration(labelText: 'Parcela'),
                 items: pending.map((item) => DropdownMenuItem(value: item.id, child: Text('Parcela ${item.number} • ${_money(item.remainingAmount)}'))).toList(),
                 onChanged: (value) {
                   setState(() => selectedInstallmentId = value);
@@ -240,7 +262,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
                 },
               ),
             if (installment != null) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               SegmentedButton<PaymentMode>(
                 segments: const [
                   ButtonSegment(value: PaymentMode.total, label: Text('Exato')),
@@ -253,10 +275,10 @@ class _PaymentsPageState extends State<PaymentsPage> {
                   _syncAmount();
                 },
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   child: Column(
                     children: [
                       _Line(label: 'Restante da parcela', value: _money(installment.remainingAmount)),
@@ -268,12 +290,29 @@ class _PaymentsPageState extends State<PaymentsPage> {
                   ),
                 ),
               ),
+              if (mode == PaymentMode.partial) ...[
+                const SizedBox(height: 10),
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.update_rounded, color: Color(0xFFA78BFA)),
+                        SizedBox(width: 10),
+                        Expanded(child: Text('Pagamento parcial: o saldo restante será prorrogado para o próximo mês e recalculado com a taxa do empréstimo.')),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 10),
               TextField(
                 controller: amountController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   labelText: 'Valor pago',
+                  prefixText: 'R\$ ',
                   helperText: mode == PaymentMode.partial
                       ? 'Informe um valor menor que ${_money(selectedTotal)}'
                       : mode == PaymentMode.advance
@@ -297,26 +336,46 @@ class _PaymentsPageState extends State<PaymentsPage> {
               const SizedBox(height: 10),
               TextField(controller: noteController, decoration: const InputDecoration(labelText: 'Observação')),
               const SizedBox(height: 14),
-              FilledButton.icon(
-                onPressed: paying ? null : registerPayment,
-                icon: paying
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.payments_outlined),
-                label: Text(paying ? 'Registrando...' : 'Registrar pagamento'),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: paying ? null : registerPayment,
+                  icon: paying
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.payments_outlined),
+                  label: Text(paying ? 'Registrando...' : 'Registrar pagamento'),
+                ),
               ),
             ],
           ],
           if (lastResult != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Card(
-              child: ListTile(
-                leading: const Icon(Icons.receipt_long_outlined),
-                title: Text('Recibo nº ${lastResult!.receiptNumber}'),
-                subtitle: Text('${_money(lastResult!.amount)} • ${lastResult!.mode}'),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.check_circle_rounded, color: Color(0xFF22C55E)),
+                      const SizedBox(width: 8),
+                      Text('Pagamento confirmado', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                    ]),
+                    const SizedBox(height: 10),
+                    Text('Recibo nº ${lastResult!.receiptNumber}'),
+                    Text('Valor: ${_money(lastResult!.amount)}'),
+                    if (lastPartialSummary != null) ...[
+                      const Divider(height: 24),
+                      const Text('Prorrogação e recálculo', style: TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 6),
+                      Text(lastPartialSummary!),
+                    ],
+                  ],
+                ),
               ),
             ),
           ],
-          const SizedBox(height: 80),
+          const SizedBox(height: 70),
         ],
       ),
     );
@@ -325,18 +384,17 @@ class _PaymentsPageState extends State<PaymentsPage> {
 
 class _Line extends StatelessWidget {
   const _Line({required this.label, required this.value});
-
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          Expanded(child: Text(label)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+          Expanded(child: Text(label, style: const TextStyle(color: Color(0xFF94A3B8)))),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
         ],
       ),
     );
